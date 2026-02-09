@@ -1,0 +1,23 @@
+{
+  "users": [
+    {
+      "username": "yahya",
+      "password": "yahya ",
+      "bio": "hi i am yahya \n"
+    },
+    {
+      "username": "yahy",
+      "password": "yahya",
+      "bio": "Le-Minh-Phuc is a skilled software engineer specializing in C# and .NET technologies, demonstrated through personal projects and professional experience. With a passion for web development and a background as an HCMUS student, they bring a strong foundation to creating innovative web applications. Minh-Phuc's diverse portfolio and focus on practical solutions make them a valuable asset as a potential co-founder."
+    }
+  ],
+  "sessions": {
+    "de6b170f-3a8c-4d96-abb1-8820205dc01b": "yahya",
+    "e461e6ef-a84c-48f3-a430-67c7e9d0e6c2": "yahy",
+    "cccc6991-8732-4ddd-9d5a-db175d5f2576": "yahy",
+    "b1cfdbfa-d560-4337-90c7-808391037360": "yahy",
+    "f624e52c-ba77-4537-8993-8c7247ba9bc7": "yahy",
+    "5902f25b-ab12-4d96-8c46-1de9119164c2": "yahy",
+    "acef9dce-b6ed-40e8-be80-8ab2a9dc275d": "yahy"
+  }
+}

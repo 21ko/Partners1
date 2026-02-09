@@ -1,0 +1,9 @@
+
+{
+  "name": "Forge: The Builder Network",
+  "description": "A professional platform for builders to find co-founders, discover hackathons, and build meaningful projects together using AI-powered matchmaking and real-time collaboration tools.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
