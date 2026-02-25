@@ -1,106 +1,85 @@
-const API_BASE_URL = 'http://localhost:8000';
+import { Builder, AuthResponse, Session } from '../types';
 
-export interface RegisterRequest {
-    username: string;
-    password: string;
-    bio: string;
-}
-
-export interface LoginRequest {
-    username: string;
-    password: string;
-}
-
-export interface AuthResponse {
-    session_id: string;
-    username: string;
-    bio: string;
-}
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const authService = {
-    async register(data: RegisterRequest): Promise<AuthResponse> {
-        const response = await fetch(`${API_BASE_URL}/register`, {
+    async register(username: string, password: string, github_username: string): Promise<AuthResponse> {
+        const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, github_username })
         });
 
-        if (!response.ok) {
-            const error = await response.json();
+        if (!res.ok) {
+            const error = await res.json();
             throw new Error(error.detail || 'Registration failed');
         }
 
-        return response.json();
+        const data: AuthResponse = await res.json();
+        this.saveSession(data);
+        return data;
     },
 
-    async login(data: LoginRequest): Promise<AuthResponse> {
-        const response = await fetch(`${API_BASE_URL}/login`, {
+    async login(username: string, password: string): Promise<AuthResponse> {
+        const res = await fetch(`${API_URL}/login`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
         });
 
-        if (!response.ok) {
-            const error = await response.json();
+        if (!res.ok) {
+            const error = await res.json();
             throw new Error(error.detail || 'Login failed');
         }
 
-        return response.json();
+        const data: AuthResponse = await res.json();
+        this.saveSession(data);
+        return data;
     },
 
-    async updateBio(bio: string): Promise<void> {
-        const session_id = localStorage.getItem('session_id');
+    async updateProfile(updates: any): Promise<any> {
+        const session = this.getSession();
+        if (!session) throw new Error('Not authenticated');
 
-        if (!session_id) {
-            throw new Error('Not authenticated');
-        }
-
-        const response = await fetch(`${API_BASE_URL}/update-bio`, {
+        const res = await fetch(`${API_URL}/profile/update`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ session_id, bio }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: session.session_id, ...updates })
         });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to update bio');
+        if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.detail || 'Update failed');
         }
 
-        // Update localStorage
-        localStorage.setItem('bio', bio);
+        const data = await res.json();
+
+        // Update session in localStorage
+        session.profile = data.profile;
+        this.saveSession(session);
+
+        return data;
     },
 
-    saveSession(authData: AuthResponse): void {
-        localStorage.setItem('session_id', authData.session_id);
-        localStorage.setItem('username', authData.username);
-        localStorage.setItem('bio', authData.bio);
+    saveSession(session: any): void {
+        localStorage.setItem('partners_session', JSON.stringify(session));
     },
 
-    getSession(): { session_id: string; username: string; bio: string } | null {
-        const session_id = localStorage.getItem('session_id');
-        const username = localStorage.getItem('username');
-        const bio = localStorage.getItem('bio');
-
-        if (session_id && username && bio) {
-            return { session_id, username, bio };
+    getSession(): Session | null {
+        const data = localStorage.getItem('partners_session');
+        if (!data) return null;
+        try {
+            return JSON.parse(data) as Session;
+        } catch {
+            return null;
         }
-
-        return null;
     },
 
     clearSession(): void {
-        localStorage.removeItem('session_id');
-        localStorage.removeItem('username');
-        localStorage.removeItem('bio');
+        localStorage.removeItem('partners_session');
     },
 
     isAuthenticated(): boolean {
-        return !!localStorage.getItem('session_id');
-    },
+        return !!this.getSession();
+    }
 };

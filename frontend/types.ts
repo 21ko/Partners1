@@ -1,71 +1,44 @@
-
-export interface Link {
-  platform: 'GitHub' | 'Twitter' | 'LinkedIn' | 'Portfolio' | 'Other';
-  url: string;
-}
-
-export interface PastProject {
-  id: string;
-  title: string;
-  description: string;
-  link?: string;
-}
-
 export interface Builder {
-  id: string;
-  name: string;
+  username: string;
+  github_username: string;
   avatar: string;
-  role: string;
-  skills: string[];
   bio: string;
-  projectsCount: number;
-  location: string;
-  availability: 'Looking for Team' | 'Solo Building' | 'Just Browsing';
-  links: Link[];
-  pastProjectsList: PastProject[];
-  lookingFor: string[]; // e.g., ["Co-founder", "Backend Developer", "Product Designer"]
+  building_style: 'ships_fast' | 'plans_first' | 'designs_first' | 'figures_it_out';
+  interests: string[];
+  open_to: string[];
+  availability: 'this_weekend' | 'this_month' | 'open' | 'busy';
+  current_idea?: string;
+  city?: string;
+  github_languages: string[];
+  github_repos: GithubRepo[];
+  total_stars: number;
+  public_repos: number;
+  learning: string[];
+  experience_level: 'beginner' | 'intermediate' | 'advanced';
+  looking_for: 'mentor' | 'build_partner' | 'learning_buddy';
+  created_at: string;
+  updated_at: string;
 }
 
-export interface Project {
-  id: string;
-  title: string;
-  description: string;
-  tags: string[];
-  ownerId: string;
-  stars: number;
-  image: string;
-}
-
-export interface Hackathon {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  description: string;
-  prize: string;
-}
-
-
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// Synergy Engine Types
-export interface SynergyHackathon {
+export interface GithubRepo {
   name: string;
-  date: string;
-  location: string;
-  reasoning: string;
+  description: string;
+  stars: number;
+  language: string;
 }
 
 export interface MatchResult {
-  compatibility_score: number;
-  synergy_analysis: string;
-  hackathons: SynergyHackathon[];
+  matched_builder: Builder;
+  chemistry_score: number;
+  vibe: string;
+  why: string;
+  build_idea: string;
 }
 
-export interface IntegratedMatchResult {
-  result: MatchResult;
-  thoughts: string;
+export interface Session {
+  session_id: string;
+  profile: Builder;
+  needs_onboarding?: boolean;
 }
+
+export interface AuthResponse extends Session { }

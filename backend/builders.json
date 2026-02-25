@@ -1,0 +1,240 @@
+{
+  "builders": [
+    {
+      "username": "alex_builds",
+      "github_username": "alexbuilds",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=alex",
+      "bio": "Full-stack dev obsessed with shipping. 3 hackathon wins. Always has 2 side projects running in parallel.",
+      "building_style": "ships_fast",
+      "interests": [
+        "AI tools",
+        "web apps",
+        "developer tools"
+      ],
+      "open_to": [
+        "weekend projects",
+        "hackathons"
+      ],
+      "availability": "this_weekend",
+      "current_idea": "AI-powered code review tool",
+      "city": "Paris",
+      "github_languages": [
+        "TypeScript",
+        "Python",
+        "React"
+      ],
+      "total_stars": 312,
+      "public_repos": 28,
+      "password": "pass123",
+      "github_repos": [],
+      "created_at": "2026-02-23T23:52:43.066631+00:00",
+      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+    },
+    {
+      "username": "sara_designs",
+      "github_username": "saradesigns",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=sara",
+      "bio": "Design engineer who codes. Figma to production in 48h. I care about the last 10% that makes things feel right.",
+      "building_style": "designs_first",
+      "interests": [
+        "web apps",
+        "mobile",
+        "design systems"
+      ],
+      "open_to": [
+        "weekend projects",
+        "freelance"
+      ],
+      "availability": "this_month",
+      "current_idea": "A better design handoff tool for small teams",
+      "city": "London",
+      "github_languages": [
+        "TypeScript",
+        "CSS",
+        "Swift"
+      ],
+      "total_stars": 89,
+      "public_repos": 14,
+      "password": "pass123",
+      "github_repos": [],
+      "created_at": "2026-02-23T23:52:43.066631+00:00",
+      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+    },
+    {
+      "username": "ml_marco",
+      "github_username": "mlmarco",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=marco",
+      "bio": "ML engineer. Fine-tuned 3 LLMs this month. Loves turning research papers into real products.",
+      "building_style": "plans_first",
+      "interests": [
+        "AI/ML",
+        "LLMs",
+        "research tools"
+      ],
+      "open_to": [
+        "weekend projects",
+        "research collaborations"
+      ],
+      "availability": "this_weekend",
+      "current_idea": "RAG system for scientific papers",
+      "city": "Berlin",
+      "github_languages": [
+        "Python",
+        "PyTorch",
+        "Julia"
+      ],
+      "total_stars": 1240,
+      "public_repos": 41,
+      "password": "pass123",
+      "github_repos": [],
+      "created_at": "2026-02-23T23:52:43.066631+00:00",
+      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+    },
+    {
+      "username": "backend_bea",
+      "github_username": "backendBea",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=bea",
+      "bio": "Infrastructure and backend. If it doesn't scale, I'm not interested. Rust, Go, Postgres.",
+      "building_style": "plans_first",
+      "interests": [
+        "backend",
+        "infrastructure",
+        "open source"
+      ],
+      "open_to": [
+        "hackathons",
+        "open source contributions"
+      ],
+      "availability": "open",
+      "current_idea": "Distributed job queue in Rust",
+      "city": "Amsterdam",
+      "github_languages": [
+        "Rust",
+        "Go",
+        "Python"
+      ],
+      "total_stars": 567,
+      "public_repos": 33,
+      "password": "pass123",
+      "github_repos": [],
+      "created_at": "2026-02-23T23:52:43.066631+00:00",
+      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+    },
+    {
+      "username": "mobile_max",
+      "github_username": "mobilemax",
+      "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=max",
+      "bio": "iOS & Flutter dev. Published 4 apps. Makes native apps feel like magic.",
+      "building_style": "figures_it_out",
+      "interests": [
+        "mobile",
+        "AI tools",
+        "consumer apps"
+      ],
+      "open_to": [
+        "weekend projects",
+        "hackathons",
+        "co-founder search"
+      ],
+      "availability": "this_weekend",
+      "current_idea": "On-device AI assistant for iOS",
+      "city": "Barcelona",
+      "github_languages": [
+        "Swift",
+        "Dart",
+        "Kotlin"
+      ],
+      "total_stars": 203,
+      "public_repos": 19,
+      "password": "pass123",
+      "github_repos": [],
+      "created_at": "2026-02-23T23:52:43.066631+00:00",
+      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+    },
+    {
+      "username": "yahya",
+      "password": "yahya",
+      "github_username": "yahy",
+      "avatar": "https://avatars.githubusercontent.com/u/3197356?v=4",
+      "bio": "Just looking for chill people to build fun stuff with. I'm open to anything!",
+      "building_style": "figures_it_out",
+      "interests": [],
+      "open_to": [
+        "weekend projects"
+      ],
+      "availability": "open",
+      "current_idea": null,
+      "city": null,
+      "github_languages": [],
+      "github_repos": [],
+      "total_stars": 0,
+      "public_repos": 0,
+      "created_at": "2026-02-23T23:53:15.899584+00:00",
+      "updated_at": "2026-02-23T23:53:15.899584+00:00"
+    },
+    {
+      "username": "yahy",
+      "password": "yahya",
+      "github_username": "21ko",
+      "avatar": "https://avatars.githubusercontent.com/u/91777075?v=4",
+      "bio": "Builds things with Jupyter Notebook",
+      "github_languages": [
+        "Jupyter Notebook",
+        "TypeScript",
+        "Python"
+      ],
+      "github_repos": [
+        {
+          "name": "Partners",
+          "description": null,
+          "stars": 1,
+          "language": "TypeScript"
+        },
+        {
+          "name": "test_senscritique",
+          "description": "test senscritique",
+          "stars": 0,
+          "language": "Python"
+        },
+        {
+          "name": "iatrans_proj",
+          "description": "projet ia tar",
+          "stars": 0,
+          "language": null
+        },
+        {
+          "name": "-Customer-Retention-Prediction-",
+          "description": null,
+          "stars": 0,
+          "language": "Jupyter Notebook"
+        },
+        {
+          "name": "mini-proj-",
+          "description": null,
+          "stars": 0,
+          "language": "Jupyter Notebook"
+        }
+      ],
+      "total_stars": 1,
+      "public_repos": 11,
+      "building_style": "figures_it_out",
+      "interests": [],
+      "open_to": [
+        "weekend projects",
+        "hackathons"
+      ],
+      "availability": "open",
+      "current_idea": null,
+      "city": null,
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner",
+      "created_at": "2026-02-25T02:16:57.475054",
+      "updated_at": "2026-02-25T02:16:57.475054"
+    }
+  ],
+  "sessions": {
+    "acc98b2b-8470-4b26-90fb-5dcd6a973b4a": "yahya",
+    "34ad9c8b-fe98-48f7-8c26-9d59d1833ce8": "yahy"
+  }
+}

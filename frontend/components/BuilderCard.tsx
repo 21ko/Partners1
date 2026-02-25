@@ -1,48 +1,52 @@
-
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Builder } from '../types';
 
 interface BuilderCardProps {
   builder: Builder;
-  onSelect?: (builder: Builder) => void;
+  onMatch: (builder: Builder) => void;
+  matchLoading: boolean;
 }
 
-const BuilderCard: React.FC<BuilderCardProps> = ({ builder, onSelect }) => {
+const AVAILABILITY_LABELS: Record<string, string> = {
+  this_weekend: '🟢 THIS_WEEKEND',
+  this_month: '🟡 THIS_MONTH',
+  open: '🔵 OPEN_FOR_COLLAB',
+  busy: '🔴 BUSY_SHIPPING',
+};
+
+const BuilderCard: React.FC<BuilderCardProps> = ({ builder, onMatch, matchLoading }) => {
   return (
-    <div className="glass p-5 rounded-2xl hover:border-indigo-500/50 transition-all group flex flex-col h-full">
-      <div className="flex items-start gap-4 mb-4">
-        <div className="relative">
-          <img src={builder.avatar} alt={builder.name} className="w-16 h-16 rounded-2xl object-cover shadow-lg" />
-          <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${
-            builder.availability === 'Looking for Team' ? 'bg-green-500' : 'bg-slate-500'
-          }`}></div>
-        </div>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-[#0D1525] border border-slate-800 p-6 rounded-2xl flex flex-col gap-6"
+    >
+      <div className="flex items-center gap-4">
+        <img src={builder.avatar} className="w-16 h-16 rounded-xl border border-slate-800" alt="" />
         <div>
-          <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors">{builder.name}</h3>
-          <p className="text-slate-400 text-sm font-medium">{builder.role}</p>
-          <p className="text-slate-500 text-xs mt-1">📍 {builder.location}</p>
+          <div className="font-bold text-white">@{builder.username}</div>
+          <div className="text-[9px] font-mono text-slate-500 uppercase">{builder.city || 'PARIS_SECTOR'}</div>
+          <div className="mt-2 text-[10px] font-mono text-terminal-green">{AVAILABILITY_LABELS[builder.availability]}</div>
         </div>
       </div>
-      
-      <p className="text-slate-300 text-sm line-clamp-2 mb-4 flex-grow italic">
-        "{builder.bio}"
-      </p>
 
-      <div className="flex flex-wrap gap-1.5 mb-6">
-        {builder.skills.map((skill) => (
-          <span key={skill} className="px-2 py-0.5 bg-slate-800 rounded-md text-[10px] uppercase tracking-wider font-bold text-slate-400">
-            {skill}
-          </span>
+      <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 italic">"{builder.bio}"</p>
+
+      <div className="flex flex-wrap gap-1">
+        {builder.github_languages.slice(0, 3).map(l => (
+          <span key={l} className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded uppercase">{l}</span>
         ))}
       </div>
 
-      <button 
-        onClick={() => onSelect?.(builder)}
-        className="w-full py-2 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-xl text-sm font-bold transition-all border border-indigo-500/30"
+      <button
+        onClick={() => onMatch(builder)}
+        disabled={matchLoading}
+        className="w-full bg-terminal-blue text-[#0A0F1C] text-[10px] font-mono font-black py-3 rounded-xl hover:opacity-90 transition-all uppercase"
       >
-        Connect
+        {matchLoading ? 'RUNNING_SCAN...' : 'ANALYZE_CHEMISTRY'}
       </button>
-    </div>
+    </motion.div>
   );
 };
 

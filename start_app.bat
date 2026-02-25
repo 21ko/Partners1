@@ -2,7 +2,7 @@
 echo Starting Partners Synergy Engine...
 
 :: Start Backend
-start "Partners Backend (Synergy Engine)" cmd /k "cd backend && python main.py"
+start "Partners API" cmd /k "cd backend && python main.py"
 
 :: Start Frontend
 start "Partners Frontend" cmd /k "cd frontend && npm run dev"

@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import Explore from './pages/Explore';
@@ -20,56 +20,18 @@ const App: React.FC = () => {
     const session = authService.getSession();
     if (session) {
       setIsAuthenticated(true);
-      // Create user object from session data
-      setUser({
-        id: session.username,
-        name: session.username,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.username}`,
-        role: 'Builder',
-        skills: [],
-        bio: session.bio,
-        projectsCount: 0,
-        location: 'Remote',
-        availability: 'Looking for Team',
-        links: [],
-        pastProjectsList: [],
-        lookingFor: []
-      });
+      setUser(session.profile);
     }
-
-    const timer = setTimeout(() => setIsLoading(false), 800);
+    const timer = setTimeout(() => setIsLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
-
-  // Update localStorage when user bio changes
-  useEffect(() => {
-    if (user && isAuthenticated) {
-      const session = authService.getSession();
-      if (session && user.bio !== session.bio) {
-        // Update bio in localStorage
-        localStorage.setItem('bio', user.bio);
-      }
-    }
-  }, [user, isAuthenticated]);
 
   const handleAuthSuccess = () => {
     const session = authService.getSession();
     if (session) {
       setIsAuthenticated(true);
-      setUser({
-        id: session.username,
-        name: session.username,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.username}`,
-        role: 'Builder',
-        skills: [],
-        bio: session.bio,
-        projectsCount: 0,
-        location: 'Remote',
-        availability: 'Looking for Team',
-        links: [],
-        pastProjectsList: [],
-        lookingFor: []
-      });
+      setUser(session.profile);
+      setActiveTab('dashboard');
     }
   };
 
@@ -80,86 +42,86 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  const handleUserUpdate = (updated: Builder) => {
+    setUser(updated);
+  };
+
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center">
-        <div className="w-16 h-16 builder-gradient rounded-2xl flex items-center justify-center animate-pulse mb-6">
-          <span className="text-3xl font-bold text-white">F</span>
+      <div className="fixed inset-0 bg-[#0A0F1C] flex flex-col items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="w-20 h-20 border-2 border-terminal-green rounded-xl flex items-center justify-center mb-8 relative"
+        >
+          <span className="text-4xl font-bold text-terminal-green font-mono">P</span>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="absolute inset-[-4px] border border-terminal-green/30 rounded-xl"
+          />
+        </motion.div>
+        <div className="text-terminal-green font-mono text-sm tracking-widest animate-pulse">
+          INITIALIZING_PARTNERS_PROTOCOL...
         </div>
-        <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden">
-          <div className="h-full bg-indigo-500 animate-[loading_1.5s_ease-in-out_infinite]"></div>
-        </div>
-        <style>{`
-          @keyframes loading {
-            0% { width: 0%; transform: translateX(-100%); }
-            50% { width: 100%; transform: translateX(0); }
-            100% { width: 0%; transform: translateX(100%); }
-          }
-        `}</style>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <AuthPage onAuthSuccess={handleAuthSuccess} />
+      </motion.div>
+    );
   }
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'explore':
-        return <Explore />;
-      case 'matchmaker':
-        return <Matchmaker currentUser={user!} />;
-      case 'profile':
-        return <Profile user={user!} onUpdate={setUser} />;
-      case 'hackathons':
-        return (
-          <div className="py-20 text-center">
-            <h2 className="text-3xl font-bold text-white mb-4">Hackathons Hub</h2>
-            <p className="text-slate-400">Discover and join global hacking events. Feature coming soon!</p>
-          </div>
-        );
-      default:
-        return <Dashboard />;
-    }
+    return (
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.3 }}
+      >
+        {(() => {
+          switch (activeTab) {
+            case 'dashboard': return <Dashboard />;
+            case 'explore': return <Explore />;
+            case 'matchmaker': return <Matchmaker />;
+            case 'profile': return user ? <Profile user={user} onUpdate={handleUserUpdate} /> : <Dashboard />;
+            default: return <Dashboard />;
+          }
+        })()}
+      </motion.div>
+    );
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col selection:bg-terminal-green/30 selection:text-terminal-green">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
 
-      <main className="flex-grow container mx-auto px-6 py-8">
-        <header className="mb-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-400">Partners Platform</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-extrabold text-white">
-              {activeTab === 'dashboard' && `Welcome back, ${user?.name}`}
-              {activeTab === 'explore' && 'Community Directory'}
-              {activeTab === 'matchmaker' && 'AI Co-founder Scout'}
-              {activeTab === 'hackathons' && 'Hackathon Hub'}
-              {activeTab === 'profile' && 'My Builder Profile'}
-            </h1>
-          </div>
-        </header>
-
-        {renderContent()}
+      <main className="flex-grow container mx-auto px-6 py-12 max-w-6xl">
+        <AnimatePresence mode="wait">
+          {renderContent()}
+        </AnimatePresence>
       </main>
 
-      <footer className="py-12 border-t border-slate-900 bg-slate-950/50">
+      <footer className="py-12 border-t border-slate-900 bg-[#0A0F1C]">
         <div className="container mx-auto px-6 text-center">
-          <div className="flex justify-center gap-8 mb-8">
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">Documentation</a>
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">Twitter</a>
-            <a href="#" className="text-slate-500 hover:text-white transition-colors">Github</a>
+          <div className="flex justify-center gap-8 mb-6 font-mono text-[10px] text-slate-500">
+            <span className="hover:text-terminal-green cursor-pointer transition-colors">v1.0.0-PROD</span>
+            <span className="hover:text-terminal-green cursor-pointer transition-colors">UPTIME: 99.9%</span>
+            <span className="hover:text-terminal-green cursor-pointer transition-colors">LATENCY: 24ms</span>
           </div>
-          <p className="text-slate-600 text-sm">
-            © 2026 Partners. Built by builders, for builders.
+          <p className="text-slate-600 text-xs font-mono">
+            &gt; PARTNERS_PROJECT // BUILT_BY_YAHYA // 2026
           </p>
         </div>
       </footer>

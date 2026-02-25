@@ -1,76 +1,115 @@
-
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Builder } from '../types';
-import BuilderCard from '../components/BuilderCard';
 
-const ALL_BUILDERS: Builder[] = [
-  { id: 'b1', name: 'Marco Rossi', avatar: 'https://picsum.photos/seed/marco/100', role: 'Fullstack Dev', skills: ['Node.js', 'PostgreSQL', 'Redis'], bio: 'Ex-stripe engineer. Passionate about infra.', projectsCount: 12, location: 'Milan, Italy', availability: 'Looking for Team', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b2', name: 'Sarah Jin', avatar: 'https://picsum.photos/seed/sarah/100', role: 'Product Designer', skills: ['Figma', 'UX Research'], bio: 'Design system lover. Building beauty.', projectsCount: 24, location: 'Seoul, KR', availability: 'Solo Building', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b3', name: 'Dave Wilson', avatar: 'https://picsum.photos/seed/dave/100', role: 'AI Engineer', skills: ['Python', 'PyTorch', 'LLMs'], bio: 'Theory to product in AI.', projectsCount: 5, location: 'Austin, TX', availability: 'Looking for Team', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b4', name: 'Elena Petrova', avatar: 'https://picsum.photos/seed/elena/100', role: 'Growth Lead', skills: ['SEO', 'Content', 'Analytics'], bio: 'Helping apps reach 1M+ users.', projectsCount: 9, location: 'Berlin, DE', availability: 'Just Browsing', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b5', name: 'Kenji Sato', avatar: 'https://picsum.photos/seed/kenji/100', role: 'Solidity Dev', skills: ['Solidity', 'Go', 'Hardhat'], bio: 'Building the future of DeFi.', projectsCount: 15, location: 'Tokyo, JP', availability: 'Looking for Team', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b6', name: 'Amara Okafor', avatar: 'https://picsum.photos/seed/amara/100', role: 'DevOps', skills: ['Kubernetes', 'AWS', 'Terraform'], bio: 'Stability at scale.', projectsCount: 11, location: 'Lagos, NG', availability: 'Solo Building', links: [], pastProjectsList: [], lookingFor: [] },
+// Static community directory — real builders will come from /discover
+const COMMUNITY_BUILDERS: Builder[] = [
+  {
+    username: 'marco_infra',
+    github_username: 'marcorossi',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=marco',
+    bio: 'Ex-Stripe engineer. Obsessed with infra that actually holds up at scale.',
+    building_style: 'plans_first',
+    interests: ['backend', 'infrastructure', 'fintech'],
+    open_to: ['weekend projects', 'hackathons'],
+    availability: 'this_weekend',
+    github_languages: ['Go', 'Node.js', 'PostgreSQL'],
+    github_repos: [],
+    total_stars: 210,
+    public_repos: 12,
+    city: 'Milan',
+    learning: ['Rust', 'Wasm'],
+    experience_level: 'advanced',
+    looking_for: 'build_partner',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    username: 'sarah_ux',
+    github_username: 'sarahjin',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
+    bio: 'Design system lover. Making software feel human, one component at a time.',
+    building_style: 'designs_first',
+    interests: ['design systems', 'mobile', 'web apps'],
+    open_to: ['weekend projects', 'freelance'],
+    availability: 'this_month',
+    github_languages: ['TypeScript', 'React', 'Figma'],
+    github_repos: [],
+    total_stars: 89,
+    public_repos: 24,
+    city: 'Seoul',
+    learning: ['Framer Motion', 'Three.js'],
+    experience_level: 'intermediate',
+    looking_for: 'build_partner',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
 ];
+
+const AVAILABILITY_LABELS: Record<string, string> = {
+  this_weekend: '🟢 THIS_WEEKEND',
+  this_month: '🟡 THIS_MONTH',
+  open: '🔵 OPEN_FOR_COLLAB',
+  busy: '🔴 BUSY_SHIPPING',
+};
 
 const Explore: React.FC = () => {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('All');
 
-  const filtered = ALL_BUILDERS.filter(b => {
-    const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.role.toLowerCase().includes(search.toLowerCase()) ||
-      b.skills.some(s => s.toLowerCase().includes(search.toLowerCase()));
-    const matchesFilter = filter === 'All' || b.availability === filter;
-    return matchesSearch && matchesFilter;
+  const filtered = (COMMUNITY_BUILDERS || []).filter((b) => {
+    const s = (search || '').toLowerCase();
+    const username = (b.username || '').toLowerCase();
+    const bio = (b.bio || '').toLowerCase();
+    const langs = (b.github_languages || []).map(l => l.toLowerCase());
+
+    return username.includes(s) ||
+      bio.includes(s) ||
+      langs.some(l => l.includes(s));
   });
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-96">
+      <header className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+        <div>
+          <h2 className="text-3xl font-black text-white mb-2">COMMUNITY_DIRECTORY</h2>
+          <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">Global_Index_Of_Verified_Builders</p>
+        </div>
+        <div className="w-full md:w-80">
           <input
             type="text"
-            placeholder="Search by skill, name or role..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all pl-11 shadow-inner"
+            placeholder="SEARCH_BY_QUERY..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl px-4 py-3 text-terminal-green font-mono text-xs focus:ring-1 focus:ring-terminal-green outline-none"
           />
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
         </div>
+      </header>
 
-        <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto">
-          {['All', 'Looking for Team', 'Solo Building', 'Just Browsing'].map(status => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${filter === status
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-                }`}
-            >
-              {status}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {filtered.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filtered.map(builder => (
-            <BuilderCard key={builder.id} builder={builder} />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-20">
-          <p className="text-slate-500 text-lg">No builders found matching your criteria.</p>
-          <button
-            onClick={() => { setSearch(''); setFilter('All'); }}
-            className="mt-4 text-indigo-400 font-bold hover:underline"
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filtered.map((builder, i) => (
+          <motion.div
+            key={builder.username || i}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05 }}
+            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-4 hover:border-slate-700 transition-colors"
           >
-            Clear filters
-          </button>
-        </div>
-      )}
+            <div className="flex items-center gap-4">
+              <img src={builder.avatar} className="w-12 h-12 rounded-lg border border-slate-800" alt="" />
+              <div>
+                <div className="font-bold text-white text-sm">@{builder.username || 'builder'}</div>
+                <div className="text-[9px] font-mono text-terminal-green">{AVAILABILITY_LABELS[builder.availability] || 'OPEN'}</div>
+              </div>
+            </div>
+            <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 italic">"{builder.bio || ''}"</p>
+            <div className="flex flex-wrap gap-1">
+              {(builder.github_languages || []).slice(0, 3).map(l => (
+                <span key={l} className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded uppercase">{l}</span>
+              ))}
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 };

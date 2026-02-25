@@ -1,193 +1,295 @@
-import React, { useState } from 'react';
-import { Builder, IntegratedMatchResult } from '../types';
-import { getMatchAnalysis, generateBio, updateBio } from '../services/geminiService';
-import BuilderCard from '../components/BuilderCard';
-import { BrainCircuit, Github, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Builder, MatchResult } from '../types';
+import { authService } from '../services/authService';
 
-interface MatchmakerProps {
-  currentUser: Builder;
-}
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const CANDIDATES: Builder[] = [
-  { id: 'b1', name: 'Marco Rossi', avatar: 'https://picsum.photos/seed/marco/100', role: 'Fullstack Dev', skills: ['Node.js', 'PostgreSQL', 'Redis'], bio: 'Ex-stripe engineer. Passionate about infra and scalable APIs.', projectsCount: 12, location: 'Milan, Italy', availability: 'Looking for Team', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b2', name: 'Sarah Jin', avatar: 'https://picsum.photos/seed/sarah/100', role: 'Product Designer', skills: ['Figma', 'UX Research', 'Prototyping'], bio: 'Design system lover. Helping startups build beauty.', projectsCount: 24, location: 'Seoul, KR', availability: 'Solo Building', links: [], pastProjectsList: [], lookingFor: [] },
-  { id: 'b3', name: 'Dave Wilson', avatar: 'https://picsum.photos/seed/dave/100', role: 'AI Engineer', skills: ['Python', 'PyTorch', 'LLMs'], bio: 'Bridging the gap between theory and product in AI.', projectsCount: 5, location: 'Austin, TX', availability: 'Looking for Team', links: [], pastProjectsList: [], lookingFor: [] },
-];
+const AVAILABILITY_LABELS: Record<string, string> = {
+  this_weekend: '🟢 THIS_WEEKEND',
+  this_month: '🟡 THIS_MONTH',
+  open: '🔵 OPEN_FOR_COLLAB',
+  busy: '🔴 BUSY_SHIPPING',
+};
 
-const Matchmaker: React.FC<MatchmakerProps> = ({ currentUser }) => {
-  const [analyzing, setAnalyzing] = useState(false);
+const STYLE_LABELS: Record<string, string> = {
+  ships_fast: '⚡ SHIPS_FAST',
+  plans_first: '📐 PLANS_FIRST',
+  designs_first: '🎨 DESIGNS_FIRST',
+  figures_it_out: '🎲 FIGURES_IT_OUT',
+};
+
+const Discover: React.FC = () => {
+  const [builders, setBuilders] = useState<Builder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterInterest, setFilterInterest] = useState('');
+  const [matchLoading, setMatchLoading] = useState<string | null>(null);
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
   const [selectedBuilder, setSelectedBuilder] = useState<Builder | null>(null);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [thoughts, setThoughts] = useState<string>("");
 
-  // Bio Generation State
-  const [githubUrl, setGithubUrl] = useState("");
-  const [generatingBio, setGeneratingBio] = useState(false);
-  const [userBio, setUserBio] = useState(currentUser.bio);
+  const session = authService.getSession();
 
-  const handleGenerateBio = async () => {
-    if (!githubUrl) return;
-    setGeneratingBio(true);
+  const fetchBuilders = async (interest?: string) => {
+    setLoading(true);
     try {
-      const bio = await generateBio(githubUrl);
-      setUserBio(bio);
-      const sessionId = localStorage.getItem('session_id');
-      if (sessionId) {
-        await updateBio(sessionId, bio);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Failed to generate bio.");
+      const params = new URLSearchParams();
+      if (session?.session_id) params.set('session_id', session.session_id);
+      if (interest) params.set('filter_interest', interest);
+
+      const res = await fetch(`${API_URL}/discover?${params.toString()}`);
+      const data = await res.json();
+      setBuilders(data);
+    } catch (e) {
+      console.error('Failed to fetch builders', e);
     } finally {
-      setGeneratingBio(false);
+      setLoading(false);
     }
   };
 
-  const handleAnalyze = async (builder: Builder) => {
-    setAnalyzing(true);
-    setSelectedBuilder(builder);
+  useEffect(() => {
+    fetchBuilders();
+  }, []);
+
+  const handleMatch = async (target: Builder) => {
+    if (!session?.session_id) return;
+    setMatchLoading(target.username);
+    setMatchResult(null);
+    setSelectedBuilder(target);
+
     try {
-      const updatedCurrentUser = { ...currentUser, bio: userBio };
-      const integratedResult: IntegratedMatchResult = await getMatchAnalysis(updatedCurrentUser, builder);
-      setAnalysis(integratedResult.result);
-      setThoughts(integratedResult.thoughts);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to analyze match. Check console.");
+      const res = await fetch(`${API_URL}/match/${target.username}?session_id=${session.session_id}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      setMatchResult(data);
+    } catch (e) {
+      console.error('Match failed', e);
     } finally {
-      setAnalyzing(false);
+      setMatchLoading(null);
     }
+  };
+
+  const handleFilter = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchBuilders(filterInterest || undefined);
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-8">
-      <div className="mb-12 text-center">
-        <h1 className="text-5xl font-black text-white mb-4 tracking-tight">
-          Partners<span className="text-indigo-500">.</span>
-        </h1>
-        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-          The Synergy Engine by Yahya. Find long-term co-founders through high-reasoning AI analysis.
-        </p>
-      </div>
-
-      {/* Generate Bio Section */}
-      <div className="mb-12 glass p-6 rounded-3xl border border-indigo-500/20 max-w-2xl mx-auto">
-        <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-          <Sparkles className="text-indigo-400" size={20} />
-          Optimize Your Profile
-        </h3>
-        <div className="flex gap-3">
-          <div className="relative flex-grow">
-            <Github className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+    <div className="space-y-12">
+      {/* Filter Section */}
+      <section>
+        <form onSubmit={handleFilter} className="flex gap-4">
+          <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Enter GitHub URL (e.g. github.com/username)"
-              value={githubUrl}
-              onChange={(e) => setGithubUrl(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
+              value={filterInterest}
+              onChange={(e) => setFilterInterest(e.target.value)}
+              placeholder="FILTER_BY_INTEREST (E.G. AI_TOOLS, REACT, WEB3...)"
+              className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-4 text-terminal-blue placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-terminal-blue transition-all font-mono text-xs uppercase"
             />
           </div>
           <button
-            onClick={handleGenerateBio}
-            disabled={generatingBio || !githubUrl}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-600/20"
+            type="submit"
+            className="bg-terminal-blue text-[#0A0F1C] font-mono font-bold px-8 py-4 rounded-xl hover:opacity-90 transition-all text-xs"
           >
-            {generatingBio ? <Loader2 className="animate-spin" size={18} /> : "Generate Bio ✨"}
+            RUN_FILTER
           </button>
-        </div>
-        {userBio !== currentUser.bio && (
-          <div className="mt-4 p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
-            <p className="text-xs text-indigo-400 font-bold uppercase mb-1">New AI Bio Generated:</p>
-            <p className="text-sm text-slate-300 italic">"{userBio}"</p>
+        </form>
+      </section>
+
+      {/* Match Result Overlay/Panel */}
+      <AnimatePresence>
+        {matchResult && selectedBuilder && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="p-8 bg-slate-900 border-2 border-terminal-green/30 rounded-3xl shadow-[0_0_50px_rgba(0,255,65,0.1)] relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 p-6">
+              <button onClick={() => setMatchResult(null)} className="text-slate-500 hover:text-white transition-colors">
+                <span className="font-mono text-xs">[ESC] CLOSE</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+              <div className="md:col-span-3 flex flex-col items-center text-center">
+                <div className="relative mb-4">
+                  <img
+                    src={selectedBuilder.avatar}
+                    alt={selectedBuilder.username}
+                    className="w-24 h-24 rounded-full border-4 border-terminal-green p-1"
+                  />
+                  <div className="absolute bottom-0 right-0 bg-terminal-green text-[#0A0F1C] text-[10px] font-mono font-black px-2 py-0.5 rounded-full">
+                    SELECTED
+                  </div>
+                </div>
+                <h3 className="text-white font-black text-xl mb-1">@{selectedBuilder.username}</h3>
+                <p className="text-terminal-green font-mono text-xs uppercase tracking-tighter">{matchResult.vibe}</p>
+              </div>
+
+              <div className="md:col-span-9 space-y-6">
+                <div className="flex items-end gap-6 mb-2">
+                  <div className="flex-grow">
+                    <div className="flex justify-between text-[10px] font-mono font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                      <span>Chemistry_Analysis</span>
+                      <span>{matchResult.chemistry_score}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${matchResult.chemistry_score}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="h-full bg-gradient-to-r from-terminal-green to-terminal-blue rounded-full"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-6xl font-black text-terminal-green font-mono opacity-20">
+                    {matchResult.chemistry_score}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-slate-300 leading-relaxed text-sm">
+                    <span className="text-terminal-green font-mono mr-2">&gt;</span>
+                    {matchResult.why}
+                  </p>
+                  <div className="p-4 bg-terminal-green/5 border border-terminal-green/20 rounded-xl">
+                    <h4 className="text-[10px] font-mono font-black text-terminal-green uppercase tracking-[0.2em] mb-2">Build_Proposal</h4>
+                    <p className="text-white text-sm font-medium italic">"{matchResult.build_idea}"</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Builders Grid */}
+      <section>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-[400px] bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : builders.length === 0 ? (
+          <div className="text-center py-24 bg-slate-900/20 rounded-3xl border border-slate-800 border-dashed">
+            <p className="text-slate-500 font-mono text-sm uppercase tracking-widest">No_Builders_Detected_In_Sector</p>
+            <button
+              onClick={() => fetchBuilders()}
+              className="mt-6 text-terminal-blue font-mono text-[10px] hover:underline"
+            >
+              REFRESH_SCAN_BUFFER
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {builders.map((builder, i) => (
+              <BuilderCard
+                key={builder.username}
+                builder={builder}
+                onMatch={handleMatch}
+                matchLoading={matchLoading === builder.username}
+                delay={i * 0.05}
+              />
+            ))}
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        {CANDIDATES.map(builder => (
-          <div key={builder.id} className="relative group">
-            <BuilderCard builder={builder} onSelect={() => handleAnalyze(builder)} />
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="bg-indigo-600 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider text-white">
-                New Prospect
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Analysis Section */}
-      {selectedBuilder && (
-        <div className="glass p-8 rounded-3xl border border-indigo-500/30 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
-            <div className="flex -space-x-6">
-              <img src={currentUser.avatar} className="w-24 h-24 rounded-full border-4 border-slate-900 ring-4 ring-indigo-500/20 shadow-xl" alt="" />
-              <img src={selectedBuilder.avatar} className="w-24 h-24 rounded-full border-4 border-slate-900 ring-4 ring-purple-500/20 shadow-xl" alt="" />
-            </div>
-
-            <div className="flex-grow">
-              <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
-                <h2 className="text-2xl font-bold text-white">Match Analysis with {selectedBuilder.name}</h2>
-                {analysis && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 rounded-full">
-                    <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></div>
-                    <span className="text-cyan-400 font-bold text-sm">{analysis.compatibility_score}% Synergy</span>
-                  </div>
-                )}
-              </div>
-
-              {analyzing ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-slate-400 font-medium">Scouting compatibility...</p>
-                </div>
-              ) : analysis ? (
-                <div className="grid grid-cols-1 gap-8">
-                  {/* NEW: Cognitive Reasoning Section */}
-                  {thoughts && (
-                    <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl shadow-xl">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="p-1.5 bg-indigo-500/20 rounded-lg">
-                          <BrainCircuit size={16} className="text-indigo-400" />
-                        </div>
-                        <h4 className="text-indigo-400 text-[11px] font-bold uppercase tracking-[0.2em]">Cognitive Reasoning Trace</h4>
-                      </div>
-                      <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                        <p className="text-slate-400 text-xs font-mono leading-relaxed opacity-80">
-                          {thoughts}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <h4 className="text-indigo-400 text-xs font-bold uppercase mb-2">Synergy Analysis</h4>
-                    <p className="text-slate-300 leading-relaxed whitespace-pre-line">{analysis.synergy_analysis}</p>
-                  </div>
-
-                  <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 shadow-inner">
-                    <h4 className="text-purple-400 text-xs font-bold uppercase mb-4">Recommended First Dates (Hackathons)</h4>
-                    <div className="space-y-4">
-                      {analysis.hackathons?.map((hackathon: any, index: number) => (
-                        <div key={index} className="border-b border-slate-800 last:border-0 pb-4 last:pb-0">
-                          <div className="flex justify-between items-start mb-1">
-                            <h5 className="text-white font-bold">{hackathon.name}</h5>
-                            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded">{hackathon.date}</span>
-                          </div>
-                          <p className="text-xs text-indigo-400 mb-2">{hackathon.location}</p>
-                          <p className="text-slate-400 text-sm italic">"{hackathon.reasoning}"</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      )}
+      </section>
     </div>
   );
 };
 
-export default Matchmaker;
+interface BuilderCardProps {
+  builder: Builder;
+  onMatch: (b: Builder) => void;
+  matchLoading: boolean;
+  delay: number;
+}
+
+const BuilderCard: React.FC<BuilderCardProps> = ({ builder, onMatch, matchLoading, delay }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay }}
+    className="group bg-[#0D1525] border border-slate-800 hover:border-terminal-blue/50 rounded-2xl p-6 flex flex-col gap-6 transition-all duration-300 relative overflow-hidden"
+  >
+    {/* Glow effect on hover */}
+    <div className="absolute inset-0 bg-terminal-blue/0 group-hover:bg-terminal-blue/[0.02] transition-colors pointer-events-none" />
+
+    <div className="flex items-start gap-4 z-10">
+      <div className="relative">
+        <img
+          src={builder.avatar}
+          alt={builder.username}
+          className="w-16 h-16 rounded-xl border-2 border-slate-800 group-hover:border-terminal-blue transition-colors flex-shrink-0 grayscale group-hover:grayscale-0"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${builder.username}`;
+          }}
+        />
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-terminal-green rounded-full border-2 border-[#0D1525] shadow-[0_0_8px_rgba(0,255,65,0.5)]" />
+      </div>
+      <div className="min-w-0">
+        <h3 className="font-bold text-white group-hover:text-terminal-blue transition-colors truncate">@{builder.username}</h3>
+        <p className="text-slate-500 text-[10px] font-mono mt-1 uppercase tracking-tighter">Loc: {builder.city || 'EARTH_SECTOR'}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="text-[9px] font-mono font-bold px-2 py-0.5 bg-slate-800 text-slate-400 rounded uppercase">
+            {STYLE_LABELS[builder.building_style] || builder.building_style}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div className="space-y-4 z-10 flex-grow">
+      <p className="text-slate-400 text-xs leading-relaxed line-clamp-3 font-medium">
+        {builder.bio}
+      </p>
+
+      {(builder.github_languages || []).length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-800/50">
+          {(builder.github_languages || []).slice(0, 3).map((lang) => (
+            <span key={lang} className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-terminal-blue/5 text-terminal-blue border border-terminal-blue/10 rounded">
+              {lang}
+            </span>
+          ))}
+          {builder.github_languages.length > 3 && (
+            <span className="text-[9px] font-mono text-slate-600">+{builder.github_languages.length - 3}</span>
+          )}
+        </div>
+      )}
+    </div>
+
+    <div className="space-y-4 z-10">
+      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 uppercase">
+        <div className="flex gap-4">
+          <span>⭐ {builder.total_stars}</span>
+          <span>📦 {builder.public_repos}</span>
+        </div>
+        <span className="text-terminal-green">{AVAILABILITY_LABELS[builder.availability] || builder.availability}</span>
+      </div>
+
+      <button
+        onClick={() => onMatch(builder)}
+        disabled={matchLoading}
+        className="w-full bg-[#0A0F1C] border border-terminal-blue/30 text-terminal-blue group-hover:bg-terminal-blue group-hover:text-[#0A0F1C] text-xs font-mono font-bold py-3 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 uppercase tracking-widest overflow-hidden relative"
+      >
+        <span className="relative z-10">
+          {matchLoading ? 'RUNNING_ANALYSIS...' : 'CHECK_CHEMISTRY'}
+        </span>
+        {matchLoading && (
+          <motion.div
+            layoutId="loading"
+            className="absolute inset-0 bg-terminal-blue/20"
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+        )}
+      </button>
+    </div>
+  </motion.div>
+);
+
+export default Discover;
