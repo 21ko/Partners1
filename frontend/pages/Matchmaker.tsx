@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Builder, MatchResult } from '../types';
-import { authService } from '../services/authService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { authService, API_URL, safeJson } from '../services/authService';
 
 const AVAILABILITY_LABELS: Record<string, string> = {
   this_weekend: '🟢 THIS_WEEKEND',
@@ -37,7 +35,7 @@ const Discover: React.FC = () => {
       if (interest) params.set('filter_interest', interest);
 
       const res = await fetch(`${API_URL}/discover?${params.toString()}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       setBuilders(data);
     } catch (e) {
       console.error('Failed to fetch builders', e);
@@ -60,7 +58,7 @@ const Discover: React.FC = () => {
       const res = await fetch(`${API_URL}/match/${target.username}?session_id=${session.session_id}`, {
         method: 'POST',
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       setMatchResult(data);
     } catch (e) {
       console.error('Match failed', e);

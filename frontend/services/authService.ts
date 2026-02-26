@@ -1,6 +1,6 @@
 import { Builder, AuthResponse, Session } from '../types';
 
-const getApiUrl = () => {
+export const getApiUrl = () => {
     try {
         // Check for Vite's import.meta.env
         if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
@@ -16,9 +16,9 @@ const getApiUrl = () => {
     return 'http://localhost:8000';
 };
 
-const API_URL = getApiUrl();
+export const API_URL = getApiUrl();
 
-const safeJson = async (res: Response) => {
+export const safeJson = async (res: Response) => {
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
         return await res.json();
