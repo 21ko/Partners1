@@ -14,6 +14,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [githubUsername, setGithubUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [city, setCity] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -25,7 +27,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
             if (isLogin) {
                 session = await authService.login(username, password);
             } else {
-                session = await authService.register(username, password, githubUsername);
+                session = await authService.register(username, password, githubUsername, email, city);
             }
             onAuthSuccess(session);
         } catch (err: any) {
@@ -82,6 +84,31 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
                                         value={githubUsername}
                                         onChange={(e) => setGithubUsername(e.target.value)}
                                         className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl pl-28 pr-4 py-4 text-terminal-blue font-mono text-sm focus:ring-1 focus:ring-terminal-blue outline-none"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {!isLogin && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2 ml-1 tracking-widest">Email (Optional)</label>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl px-4 py-4 text-white font-mono text-sm focus:ring-1 focus:ring-terminal-green outline-none"
+                                        placeholder="user@example.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2 ml-1 tracking-widest">City / Remote</label>
+                                    <input
+                                        type="text"
+                                        value={city}
+                                        onChange={(e) => setCity(e.target.value)}
+                                        className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl px-4 py-4 text-white font-mono text-sm focus:ring-1 focus:ring-terminal-green outline-none"
+                                        placeholder="e.g. Paris or Remote"
                                     />
                                 </div>
                             </div>

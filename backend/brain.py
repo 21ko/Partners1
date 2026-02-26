@@ -57,15 +57,62 @@ Return ONLY the bio. No quotes, no extra text.
             return f"Builds things with {langs[0]}"
         return "Builder who makes things"
 
+def calculate_skill_synergy(user1: dict, user2: dict) -> int:
+    """
+    Programmatic matching algorithm to calculate base chemistry score.
+    Higher efficiency, no LLM cost.
+    """
+    score = 40  # Start with baseline
+    
+    # 1. Shared Interests (+10 each)
+    interests1 = set(user1.get('interests', []))
+    interests2 = set(user2.get('interests', []))
+    shared_interests = interests1 & interests2
+    score += len(shared_interests) * 10
+    
+    # 2. Mentor/Learner Bonus (+20 each)
+    # User1 knows what User2 wants to learn
+    knows1 = set(user1.get('github_languages', []))
+    wants2 = set(user2.get('learning', []))
+    mentor_bonus1 = len(knows1 & wants2)
+    score += mentor_bonus1 * 20
+    
+    # User2 knows what User1 wants to learn
+    knows2 = set(user2.get('github_languages', []))
+    wants1 = set(user1.get('learning', []))
+    mentor_bonus2 = len(knows2 & wants1)
+    score += mentor_bonus2 * 20
+    
+    # 3. Building Style Alignment (+15)
+    if user1.get('building_style') == user2.get('building_style'):
+        score += 15
+        
+    # 4. Shared Languages (+5 each)
+    shared_langs = knows1 & knows2
+    score += len(shared_langs) * 5
+    
+    # 5. City Bonus (+15 if same city)
+    if user1.get('city') and user2.get('city') and user1['city'].lower() == user2['city'].lower():
+        score += 15
+        
+    return min(100, score)
+
 # ============================================
 # MATCHING LOGIC
 # ============================================
 
-def find_build_matches(user1: dict, user2: dict) -> dict:
+def find_build_matches(user1: dict, user2: dict, local_only: bool = False) -> dict:
     """
     Match two builders based on BUILD CHEMISTRY.
-    Returns chemistry score, vibe, reasoning, and build idea.
+    Combines programmatic synergy with LLM vibe check.
     """
+    # 1. Calculate programmatic base score
+    base_score = calculate_skill_synergy(user1, user2)
+    
+    # If local_only is requested and cities don't match, drop score significantly
+    if local_only and user1.get('city') != user2.get('city'):
+        base_score = 0
+        
     client = get_gemini_client()
     
     # Build prompt
@@ -125,14 +172,16 @@ Be honest. Low scores are fine. Focus on what they could BUILD together.
         
         result = json.loads(text.strip())
         
-        # Validate
-        required = ['chemistry_score', 'vibe', 'why', 'build_idea']
-        if not all(k in result for k in required):
-            raise ValueError("Invalid response structure")
+        # Combine base_score (logic) with LLM insight
+        # AI can adjust score by +/- 20% based on "vibe"
+        ai_adjustment = (int(result.get('chemistry_score', 50)) - 50) / 4
+        final_score = int(base_score + ai_adjustment)
+        result['chemistry_score'] = max(0, min(100, final_score))
         
-        # Clamp score to 0-100
-        result['chemistry_score'] = max(0, min(100, int(result['chemistry_score'])))
-        
+        # Add city flavor to "why" if same city
+        if user1.get('city') and user1.get('city') == user2.get('city'):
+            result['why'] = f"📍 Both in {user1['city']}! " + result['why']
+            
         return result
         
     except Exception as e:

@@ -11,7 +11,11 @@ const QUOTES = [
   "Real builders ship at 2 AM and debug over coffee."
 ];
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  setActiveTab: (tab: string) => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
   const user = authService.getSession()?.profile;
   const [quoteIdx, setQuoteIdx] = useState(0);
 
@@ -62,7 +66,10 @@ const Dashboard: React.FC = () => {
               transition={{ delay: 0.3 }}
               className="flex flex-wrap gap-4"
             >
-              <button className="bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-8 rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,255,65,0.2)]">
+              <button
+                onClick={() => setActiveTab('matchmaker')}
+                className="bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-8 rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,255,65,0.2)]"
+              >
                 FIND_PARTNER.EXE
               </button>
               <button className="border border-slate-800 text-white font-mono py-4 px-8 rounded-xl hover:bg-slate-800 transition-all">

@@ -32,11 +32,11 @@ export const safeJson = async (res: Response) => {
 };
 
 export const authService = {
-    async register(username: string, password: string, github_username: string): Promise<AuthResponse> {
+    async register(username: string, password: string, github_username: string, email?: string, city?: string): Promise<AuthResponse> {
         const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, github_username })
+            body: JSON.stringify({ username, password, github_username, email, city })
         });
 
         if (!res.ok) {

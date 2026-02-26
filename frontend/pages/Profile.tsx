@@ -16,6 +16,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
     interests: user?.interests || [],
     experience_level: user?.experience_level || 'intermediate',
     learning: user?.learning || [],
+    email: user?.email || '',
+    city: user?.city || '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -112,6 +114,32 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
           </div>
         </section>
       </div>
+
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+        <h3 className="text-xs font-mono font-bold text-terminal-purple uppercase mb-6 tracking-widest">Contact_&_Location</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2">EMAIL_ADDRESS</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="YOUR@EMAIL.COM"
+              className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl p-4 text-white text-sm focus:ring-1 focus:ring-terminal-purple outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2">CITY_OR_REMOTE</label>
+            <input
+              type="text"
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              placeholder="E.G. SAN FRANCISCO"
+              className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl p-4 text-white text-sm focus:ring-1 focus:ring-terminal-purple outline-none"
+            />
+          </div>
+        </div>
+      </section>
 
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
         <h3 className="text-xs font-mono font-bold text-terminal-purple uppercase mb-6 tracking-widest">Project_Intent</h3>

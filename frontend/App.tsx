@@ -109,11 +109,11 @@ const App: React.FC = () => {
       >
         {(() => {
           switch (activeTab) {
-            case 'dashboard': return <Dashboard />;
+            case 'dashboard': return <Dashboard setActiveTab={setActiveTab} />;
             case 'explore': return <Explore />;
             case 'matchmaker': return <Matchmaker />;
-            case 'profile': return user ? <Profile user={user} onUpdate={handleUserUpdate} /> : <Dashboard />;
-            default: return <Dashboard />;
+            case 'profile': return user ? <Profile user={user} onUpdate={handleUserUpdate} /> : <Dashboard setActiveTab={setActiveTab} />;
+            default: return <Dashboard setActiveTab={setActiveTab} />;
           }
         })()}
       </motion.div>

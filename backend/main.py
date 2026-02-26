@@ -57,6 +57,8 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     github_username: str
+    email: Optional[str] = None
+    city: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -75,6 +77,7 @@ class UpdateProfileRequest(BaseModel):
     availability: Optional[str] = None
     current_idea: Optional[str] = None
     city: Optional[str] = None
+    email: Optional[str] = None
     learning: Optional[List[str]] = None
     experience_level: Optional[str] = None
     looking_for: Optional[str] = None
@@ -166,6 +169,8 @@ def load_data():
             if 'public_repos' not in b: b['public_repos'] = 0
             if 'avatar' not in b: b['avatar'] = f"https://api.dicebear.com/7.x/avataaars/svg?seed={b.get('username', 'anon')}"
             if 'bio' not in b: b['bio'] = ""
+            if 'email' not in b: b['email'] = ""
+            if 'city' not in b: b['city'] = None
         return data
 
 def save_data(data):
@@ -205,9 +210,11 @@ async def fetch_github_data(github_username: str) -> dict:
             
             # Aggregate languages
             languages = {}
-            for repo in repos[:5]:
-                if repo.get('language'):
-                    languages[repo['language']] = languages.get(repo['language'], 0) + 1
+            for repo_data in (repos if isinstance(repos, list) else [])[:5]:
+                repo: dict = repo_data if isinstance(repo_data, dict) else {}
+                lang = repo.get('language')
+                if lang:
+                    languages[lang] = languages.get(lang, 0) + 1
             
             return {
                 "github_username": github_username,
@@ -216,14 +223,14 @@ async def fetch_github_data(github_username: str) -> dict:
                 "github_languages": sorted(languages.keys(), key=languages.get, reverse=True)[:5],
                 "github_repos": [
                     {
-                        "name": r["name"],
+                        "name": r.get("name", "unknown"),
                         "description": r.get("description", ""),
-                        "stars": r["stargazers_count"],
+                        "stars": r.get("stargazers_count", 0),
                         "language": r.get("language", "")
                     }
-                    for r in repos[:5]
+                    for r in (repos if isinstance(repos, list) else [])[:5]
                 ],
-                "total_stars": sum(r["stargazers_count"] for r in repos),
+                "total_stars": sum(r.get("stargazers_count", 0) if isinstance(r, dict) else 0 for r in (repos if isinstance(repos, list) else [])),
                 "public_repos": profile.get("public_repos", 0)
             }
     except httpx.HTTPError as e:
@@ -278,7 +285,8 @@ async def register(request: RegisterRequest):
         "open_to": ["weekend projects", "hackathons"],
         "availability": "open",
         "current_idea": None,
-        "city": None,
+        "email": request.email,
+        "city": request.city or None,
         "learning": [],
         "experience_level": "intermediate",
         "looking_for": "build_partner",
@@ -429,7 +437,7 @@ async def discover_builders(
     return [BuilderProfile(**p) for p in profiles]
 
 @app.post("/match/{target_username}", response_model=MatchResponse)
-async def get_match_analysis(target_username: str, session_id: str):
+async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False):
     """Get AI match analysis between current user and target"""
     data = load_data()
     
@@ -452,7 +460,7 @@ async def get_match_analysis(target_username: str, session_id: str):
         match_result = demo_result
     else:
         # Call AI matching (uses API)
-        match_result = find_build_matches(current_builder, target_builder)
+        match_result = find_build_matches(current_builder, target_builder, local_only=local_only)
     
     if not match_result:
         raise HTTPException(status_code=500, detail="Failed to generate match")

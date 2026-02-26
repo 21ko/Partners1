@@ -24,6 +24,7 @@ const Discover: React.FC = () => {
   const [matchLoading, setMatchLoading] = useState<string | null>(null);
   const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
   const [selectedBuilder, setSelectedBuilder] = useState<Builder | null>(null);
+  const [localOnly, setLocalOnly] = useState(false);
 
   const session = authService.getSession();
 
@@ -55,7 +56,7 @@ const Discover: React.FC = () => {
     setSelectedBuilder(target);
 
     try {
-      const res = await fetch(`${API_URL}/match/${target.username}?session_id=${session.session_id}`, {
+      const res = await fetch(`${API_URL}/match/${target.username}?session_id=${session.session_id}&local_only=${localOnly}`, {
         method: 'POST',
       });
       const data = await safeJson(res);
@@ -91,6 +92,17 @@ const Discover: React.FC = () => {
             className="bg-terminal-blue text-[#0A0F1C] font-mono font-bold px-8 py-4 rounded-xl hover:opacity-90 transition-all text-xs"
           >
             RUN_FILTER
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLocalOnly(!localOnly)}
+            className={`font-mono text-[10px] px-6 py-4 rounded-xl border transition-all flex items-center gap-3 ${localOnly
+              ? 'bg-terminal-green/20 border-terminal-green text-terminal-green'
+              : 'border-slate-800 text-slate-500 hover:border-slate-700'}`}
+          >
+            <div className={`w-2 h-2 rounded-full ${localOnly ? 'bg-terminal-green animate-pulse' : 'bg-slate-700'}`} />
+            LOCAL_ONLY: {localOnly ? 'ON' : 'OFF'}
           </button>
         </form>
       </section>

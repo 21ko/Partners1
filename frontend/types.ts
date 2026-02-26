@@ -8,6 +8,7 @@ export interface Builder {
   open_to: string[];
   availability: 'this_weekend' | 'this_month' | 'open' | 'busy';
   current_idea?: string;
+  email?: string;
   city?: string;
   github_languages: string[];
   github_repos: GithubRepo[];
