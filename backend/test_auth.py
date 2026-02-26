@@ -3,48 +3,49 @@ import json
 
 BASE_URL = "http://localhost:8000"
 
-def test_register():
+def test_register(username, github_username):
     """Test user registration"""
+    print(f"\nRegistering user: {username} (GitHub: {github_username})...")
     response = requests.post(f"{BASE_URL}/register", json={
-        "username": "testuser",
+        "username": username,
         "password": "testpass123",
-        "bio": "Full-stack developer passionate about AI and web3"
+        "github_username": github_username
     })
     print("Register Response:", response.status_code)
-    print(json.dumps(response.json(), indent=2))
-    return response.json()
+    try:
+        data = response.json()
+        print(json.dumps(data, indent=2))
+        return data
+    except:
+        print("Error:", response.text)
+        return None
 
-def test_login():
+def test_login(username):
     """Test user login"""
+    print(f"\nLogging in user: {username}...")
     response = requests.post(f"{BASE_URL}/login", json={
-        "username": "testuser",
+        "username": username,
         "password": "testpass123"
     })
-    print("\nLogin Response:", response.status_code)
-    print(json.dumps(response.json(), indent=2))
-    return response.json()
-
-def test_duplicate_register():
-    """Test registering with existing username"""
-    response = requests.post(f"{BASE_URL}/register", json={
-        "username": "testuser",
-        "password": "differentpass",
-        "bio": "Another bio"
-    })
-    print("\nDuplicate Register Response:", response.status_code)
-    print(response.json())
+    print("Login Response:", response.status_code)
+    data = response.json()
+    print(json.dumps(data, indent=2))
+    return data
 
 if __name__ == "__main__":
-    print("Testing Registration...")
-    register_result = test_register()
-    
-    print("\n" + "="*50)
-    print("Testing Login...")
-    login_result = test_login()
-    
-    print("\n" + "="*50)
-    print("Testing Duplicate Registration...")
-    test_duplicate_register()
-    
-    print("\n" + "="*50)
-    print("Session IDs are unique:", register_result['session_id'] != login_result['session_id'])
+    # Test 1: User with GitHub activity (should not need onboarding)
+    # Using 'octocat' as it usually has repos
+    result1 = test_register("octouser", "octocat")
+    if result1 and 'needs_onboarding' in result1:
+        print(f"Needs Onboarding: {result1['needs_onboarding']} (Expected: False/True depending on repos)")
+
+    # Test 2: User with no GitHub activity (should need onboarding)
+    # Using a likely fake/new user
+    result2 = test_register("newuser", "nonexistent_user_123456789")
+    if result2 and 'needs_onboarding' in result2:
+        print(f"Needs Onboarding: {result2['needs_onboarding']} (Expected: True)")
+
+    # Test 3: Login
+    if result1:
+        login_result = test_login("octouser")
+        print("Login needs_onboarding:", login_result.get('needs_onboarding'))

@@ -6,13 +6,15 @@ import Explore from './pages/Explore';
 import Matchmaker from './pages/Matchmaker';
 import Profile from './pages/Profile';
 import AuthPage from './pages/AuthPage';
-import { Builder } from './types';
+import Onboarding from './pages/Onboarding';
+import { Builder, Session } from './types';
 import { authService } from './services/authService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [user, setUser] = useState<Builder | null>(null);
 
   // Check authentication on mount
@@ -21,18 +23,22 @@ const App: React.FC = () => {
     if (session) {
       setIsAuthenticated(true);
       setUser(session.profile);
+      setNeedsOnboarding(session.needs_onboarding || false);
     }
     const timer = setTimeout(() => setIsLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleAuthSuccess = () => {
-    const session = authService.getSession();
-    if (session) {
-      setIsAuthenticated(true);
-      setUser(session.profile);
-      setActiveTab('dashboard');
-    }
+  const handleAuthSuccess = (session: Session) => {
+    setIsAuthenticated(true);
+    setUser(session.profile);
+    setNeedsOnboarding(session.needs_onboarding || false);
+    setActiveTab('dashboard');
+  };
+
+  const handleOnboardingComplete = (updatedProfile: Builder) => {
+    setUser(updatedProfile);
+    setNeedsOnboarding(false);
   };
 
   const handleLogout = () => {
@@ -78,6 +84,17 @@ const App: React.FC = () => {
       >
         <AuthPage onAuthSuccess={handleAuthSuccess} />
       </motion.div>
+    );
+  }
+
+  if (needsOnboarding && user) {
+    const session = authService.getSession();
+    return (
+      <Onboarding
+        initialProfile={user}
+        sessionId={session?.session_id || ''}
+        onComplete={handleOnboardingComplete}
+      />
     );
   }
 

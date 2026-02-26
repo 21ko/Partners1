@@ -56,6 +56,7 @@ export const authService = {
 
         // Update session in localStorage
         session.profile = data.profile;
+        session.needs_onboarding = false; // Profile update complete, onboarding no longer needed
         this.saveSession(session);
 
         return data;

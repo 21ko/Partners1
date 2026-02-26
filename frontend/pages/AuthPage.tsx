@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { authService } from '../services/authService';
 
 interface AuthPageProps {
-    onAuthSuccess: () => void;
+    onAuthSuccess: (session: any) => void;
 }
 
 const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
@@ -21,12 +21,13 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
         setError('');
 
         try {
+            let session;
             if (isLogin) {
-                await authService.login(username, password);
+                session = await authService.login(username, password);
             } else {
-                await authService.register(username, password, githubUsername);
+                session = await authService.register(username, password, githubUsername);
             }
-            onAuthSuccess();
+            onAuthSuccess(session);
         } catch (err: any) {
             setError(err.message || 'Authentication failed');
         } finally {

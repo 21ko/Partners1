@@ -28,7 +28,10 @@
       "password": "pass123",
       "github_repos": [],
       "created_at": "2026-02-23T23:52:43.066631+00:00",
-      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+      "updated_at": "2026-02-23T23:52:43.066631+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "sara_designs",
@@ -58,7 +61,10 @@
       "password": "pass123",
       "github_repos": [],
       "created_at": "2026-02-23T23:52:43.066631+00:00",
-      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+      "updated_at": "2026-02-23T23:52:43.066631+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "ml_marco",
@@ -88,7 +94,10 @@
       "password": "pass123",
       "github_repos": [],
       "created_at": "2026-02-23T23:52:43.066631+00:00",
-      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+      "updated_at": "2026-02-23T23:52:43.066631+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "backend_bea",
@@ -118,7 +127,10 @@
       "password": "pass123",
       "github_repos": [],
       "created_at": "2026-02-23T23:52:43.066631+00:00",
-      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+      "updated_at": "2026-02-23T23:52:43.066631+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "mobile_max",
@@ -149,7 +161,10 @@
       "password": "pass123",
       "github_repos": [],
       "created_at": "2026-02-23T23:52:43.066631+00:00",
-      "updated_at": "2026-02-23T23:52:43.066631+00:00"
+      "updated_at": "2026-02-23T23:52:43.066631+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "yahya",
@@ -170,7 +185,10 @@
       "total_stars": 0,
       "public_repos": 0,
       "created_at": "2026-02-23T23:53:15.899584+00:00",
-      "updated_at": "2026-02-23T23:53:15.899584+00:00"
+      "updated_at": "2026-02-23T23:53:15.899584+00:00",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner"
     },
     {
       "username": "yahy",
@@ -231,10 +249,72 @@
       "looking_for": "build_partner",
       "created_at": "2026-02-25T02:16:57.475054",
       "updated_at": "2026-02-25T02:16:57.475054"
+    },
+    {
+      "username": "octouser",
+      "password": "testpass123",
+      "github_username": "octocat",
+      "avatar": "https://avatars.githubusercontent.com/u/583231?v=4",
+      "bio": "Builds things with CSS",
+      "github_languages": [
+        "CSS",
+        "HTML"
+      ],
+      "github_repos": [
+        {
+          "name": "octocat.github.io",
+          "description": null,
+          "stars": 1051,
+          "language": "CSS"
+        },
+        {
+          "name": "Spoon-Knife",
+          "description": "This repo is for demonstration purposes only.",
+          "stars": 13627,
+          "language": "HTML"
+        },
+        {
+          "name": "Hello-World",
+          "description": "My first repository on GitHub!",
+          "stars": 3519,
+          "language": null
+        },
+        {
+          "name": "hello-worId",
+          "description": "My first repository on GitHub.",
+          "stars": 718,
+          "language": null
+        },
+        {
+          "name": "boysenberry-repo-1",
+          "description": "Testing",
+          "stars": 433,
+          "language": null
+        }
+      ],
+      "total_stars": 21024,
+      "public_repos": 8,
+      "building_style": "figures_it_out",
+      "interests": [],
+      "open_to": [
+        "weekend projects",
+        "hackathons"
+      ],
+      "availability": "open",
+      "current_idea": null,
+      "city": null,
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner",
+      "created_at": "2026-02-26T02:55:47.576101",
+      "updated_at": "2026-02-26T02:55:47.576101"
     }
   ],
   "sessions": {
     "acc98b2b-8470-4b26-90fb-5dcd6a973b4a": "yahya",
-    "34ad9c8b-fe98-48f7-8c26-9d59d1833ce8": "yahy"
+    "34ad9c8b-fe98-48f7-8c26-9d59d1833ce8": "yahy",
+    "ce10c39f-4df8-472b-b0ab-d6d457e827d6": "octouser",
+    "0a999c25-bd5c-4996-8452-8b0a31cde33e": "octouser",
+    "4df8c298-b1ea-41ea-b41f-7074966fc375": "octouser"
   }
 }
