@@ -1,6 +1,35 @@
 import { Builder, AuthResponse, Session } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const getApiUrl = () => {
+    try {
+        // Check for Vite's import.meta.env
+        if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+            if ((import.meta as any).env.VITE_API_URL) return (import.meta as any).env.VITE_API_URL;
+        }
+        // Fallback to process.env (Vite define or Node environment)
+        if (typeof process !== 'undefined' && (process as any).env && (process as any).env.VITE_API_URL) {
+            return (process as any).env.VITE_API_URL;
+        }
+    } catch (e) {
+        console.warn('Error resolving API URL:', e);
+    }
+    return 'http://localhost:8000';
+};
+
+const API_URL = getApiUrl();
+
+const safeJson = async (res: Response) => {
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        return await res.json();
+    }
+    const text = await res.text();
+    // If it's a 404 HTML page, provide a cleaner error
+    if (text.includes('<!DOCTYPE html>') || text.includes('The page could not be found')) {
+        throw new Error(`API Endpoint not found (404). Check if backend is running at ${API_URL}`);
+    }
+    throw new Error(`Server error (${res.status}): ${text.slice(0, 50)}`);
+};
 
 export const authService = {
     async register(username: string, password: string, github_username: string): Promise<AuthResponse> {
@@ -11,11 +40,10 @@ export const authService = {
         });
 
         if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.detail || 'Registration failed');
+            await safeJson(res);
         }
 
-        const data: AuthResponse = await res.json();
+        const data = await safeJson(res);
         this.saveSession(data);
         return data;
     },
@@ -28,11 +56,10 @@ export const authService = {
         });
 
         if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.detail || 'Login failed');
+            await safeJson(res);
         }
 
-        const data: AuthResponse = await res.json();
+        const data = await safeJson(res);
         this.saveSession(data);
         return data;
     },
@@ -48,11 +75,10 @@ export const authService = {
         });
 
         if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.detail || 'Update failed');
+            await safeJson(res);
         }
 
-        const data = await res.json();
+        const data = await safeJson(res);
 
         // Update session in localStorage
         session.profile = data.profile;

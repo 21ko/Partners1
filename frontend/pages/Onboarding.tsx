@@ -34,6 +34,28 @@ const STYLE_OPTIONS = [
     { id: 'figures_it_out', label: 'Figures it Out', desc: 'Experimental and agile' }
 ];
 
+const getApiUrl = () => {
+    try {
+        if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) return (import.meta as any).env.VITE_API_URL;
+        if (typeof process !== 'undefined' && (process as any).env?.VITE_API_URL) return (process as any).env.VITE_API_URL;
+    } catch (e) { }
+    return 'http://localhost:8000';
+};
+
+const API_URL = getApiUrl();
+
+const safeJson = async (res: Response) => {
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        return await res.json();
+    }
+    const text = await res.text();
+    if (text.includes('<!DOCTYPE html>') || text.includes('The page could not be found')) {
+        throw new Error(`API Endpoint not found (404). Check if backend is running at ${API_URL}`);
+    }
+    throw new Error(`Server error (${res.status}): ${text.slice(0, 50)}`);
+};
+
 const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onComplete }) => {
     const [step, setStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,7 +84,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onCo
     const handleComplete = async () => {
         try {
             setIsSubmitting(true);
-            const res = await fetch(`${(import.meta as any).env.VITE_API_URL || 'http://localhost:8000'}/profile/update`, {
+            const res = await fetch(`${API_URL}/profile/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -71,12 +93,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onCo
                 })
             });
 
-            if (!res.ok) throw new Error('Update failed');
-            const data = await res.json();
+            if (!res.ok) {
+                await safeJson(res);
+            }
+
+            const data = await safeJson(res);
             onComplete(data.profile);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert('Failed to save profile. Please try again.');
+            alert(error.message || 'Failed to save profile. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -152,8 +177,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onCo
                                             key={opt}
                                             onClick={() => toggleInterest(opt)}
                                             className={`p-3 text-sm border rounded transition-all ${profile.interests.includes(opt)
-                                                    ? 'bg-[#00FF41]/10 border-[#00FF41] text-[#00FF41]'
-                                                    : 'bg-[#162033] border-transparent hover:border-[#00FF41]/30 text-gray-400'
+                                                ? 'bg-[#00FF41]/10 border-[#00FF41] text-[#00FF41]'
+                                                : 'bg-[#162033] border-transparent hover:border-[#00FF41]/30 text-gray-400'
                                                 }`}
                                         >
                                             {opt}
@@ -185,8 +210,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onCo
                                                 key={lvl}
                                                 onClick={() => setProfile(p => ({ ...p, experience_level: lvl as any }))}
                                                 className={`py-3 capitalize border rounded ${profile.experience_level === lvl
-                                                        ? 'bg-[#BD93F9]/10 border-[#BD93F9] text-[#BD93F9]'
-                                                        : 'bg-[#162033] border-transparent text-gray-400'
+                                                    ? 'bg-[#BD93F9]/10 border-[#BD93F9] text-[#BD93F9]'
+                                                    : 'bg-[#162033] border-transparent text-gray-400'
                                                     }`}
                                             >
                                                 {lvl}
@@ -228,8 +253,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ initialProfile, sessionId, onCo
                                             key={style.id}
                                             onClick={() => setProfile(p => ({ ...p, building_style: style.id as any }))}
                                             className={`w-full p-4 text-left border rounded transition-all flex items-center justify-between group ${profile.building_style === style.id
-                                                    ? 'bg-[#8BE9FD]/10 border-[#8BE9FD] text-[#8BE9FD]'
-                                                    : 'bg-[#162033] border-transparent hover:bg-[#1c2a42]'
+                                                ? 'bg-[#8BE9FD]/10 border-[#8BE9FD] text-[#8BE9FD]'
+                                                : 'bg-[#162033] border-transparent hover:bg-[#1c2a42]'
                                                 }`}
                                         >
                                             <div>
