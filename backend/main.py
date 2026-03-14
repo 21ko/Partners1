@@ -13,6 +13,10 @@ from datetime import datetime, timedelta
 import httpx
 
 from brain import analyze_github_profile, find_build_matches, get_demo_match
+from database import (
+    get_builders, get_builder_by_username, upsert_builder,
+    save_session, get_session_username, delete_expired_sessions
+)
 
 app = FastAPI(
     title="Partners API",
@@ -120,120 +124,7 @@ def _check_password(password: str, stored: str) -> bool:
 # DATA STORAGE  (thread-safe, no fcntl)
 # ============================================
 
-DATA_FILE = Path(__file__).parent / "builders.json"
-_write_lock = threading.Lock()  # in-process lock, works on Railway
-
-
-def init_data_file():
-    if not DATA_FILE.exists():
-        demo_data = {
-            "builders": [
-                {
-                    "username": "alice",
-                    "password": _hash_password("demo123"),
-                    "github_username": "alice-dev",
-                    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=alice",
-                    "bio": "Ships fast frontends and figures it out along the way",
-                    "building_style": "ships_fast",
-                    "interests": ["web apps", "AI tools", "UI/UX"],
-                    "open_to": ["weekend projects", "hackathons"],
-                    "availability": "this_weekend",
-                    "current_idea": "Building a voice-first AI assistant",
-                    "city": "Paris",
-                    "github_languages": ["TypeScript", "React", "Python"],
-                    "github_repos": [],
-                    "total_stars": 45,
-                    "public_repos": 12,
-                    "learning": [],
-                    "experience_level": "intermediate",
-                    "looking_for": "build_partner",
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
-                },
-                {
-                    "username": "bob",
-                    "password": _hash_password("demo123"),
-                    "github_username": "bob-ml",
-                    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=bob",
-                    "bio": "Turns ML research papers into production code",
-                    "building_style": "plans_first",
-                    "interests": ["AI tools", "open source", "dev tools"],
-                    "open_to": ["side projects", "remote collab"],
-                    "availability": "this_month",
-                    "current_idea": None,
-                    "city": "Paris",
-                    "github_languages": ["Python", "PyTorch", "FastAPI"],
-                    "github_repos": [],
-                    "total_stars": 128,
-                    "public_repos": 23,
-                    "learning": [],
-                    "experience_level": "advanced",
-                    "looking_for": "build_partner",
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
-                }
-            ],
-            "sessions": {}
-        }
-        with open(DATA_FILE, 'w') as f:
-            json.dump(demo_data, f, indent=2)
-
-init_data_file()
-
-
-def load_data() -> dict:
-    with open(DATA_FILE, 'r') as f:
-        data = json.load(f)
-
-    for b in data.get('builders', []):
-        b.setdefault('learning', [])
-        b.setdefault('experience_level', 'intermediate')
-        b.setdefault('looking_for', 'build_partner')
-        b.setdefault('interests', [])
-        b.setdefault('open_to', ["weekend projects", "hackathons"])
-        b.setdefault('building_style', "figures_it_out")
-        b.setdefault('github_languages', [])
-        b.setdefault('github_repos', [])
-        b.setdefault('total_stars', 0)
-        b.setdefault('public_repos', 0)
-        b.setdefault('avatar', f"https://api.dicebear.com/7.x/avataaars/svg?seed={b.get('username','anon')}")
-        b.setdefault('bio', "")
-        b.setdefault('email', "")
-        b.setdefault('city', None)
-
-    # Purge expired sessions
-    cutoff = (datetime.now() - timedelta(days=SESSION_TTL_DAYS)).isoformat()
-    data['sessions'] = {
-        sid: s for sid, s in data.get('sessions', {}).items()
-        if isinstance(s, dict) and s.get('created_at', '') >= cutoff
-    }
-
-    return data
-
-
-def save_data(data: dict):
-    """Thread-safe write - no fcntl needed."""
-    with _write_lock:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-
-
-def _get_session_username(data: dict, session_id: str) -> str:
-    session = data.get('sessions', {}).get(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    if isinstance(session, dict):
-        return session['username']
-    return session  # legacy plain string
-
-
-def _make_session(data: dict, username: str) -> str:
-    session_id = str(uuid.uuid4())
-    data['sessions'][session_id] = {
-        "username": username,
-        "created_at": datetime.now().isoformat()
-    }
-    return session_id
+# Sessions are now handled in database
 
 
 # ============================================
@@ -322,9 +213,8 @@ async def fetch_github_data(github_username: str) -> dict:
 
 @app.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
-    data = load_data()
-
-    if any(b['username'] == request.username for b in data['builders']):
+    existing = get_builder_by_username(request.username)
+    if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
 
     github_data = await fetch_github_data(request.github_username)
@@ -334,7 +224,7 @@ async def register(request: RegisterRequest):
     if not bio or len(bio) < 10:
         bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
 
-    now = datetime.now().isoformat()
+    now = datetime.now()
     new_builder = {
         "username": request.username,
         "password": _hash_password(request.password),
@@ -354,11 +244,14 @@ async def register(request: RegisterRequest):
         "updated_at": now
     }
 
-    data['builders'].append(new_builder)
-    session_id = _make_session(data, request.username)
-    save_data(data)
+    upsert_builder(new_builder)
+    session_id = str(uuid.uuid4())
+    save_session(session_id, request.username)
 
     profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
+    # Convert dates to strings for Pydantic
+    profile['created_at'] = profile['created_at'].isoformat()
+    profile['updated_at'] = profile['updated_at'].isoformat()
     return AuthResponse(
         session_id=session_id,
         profile=BuilderProfile(**profile),
@@ -368,22 +261,28 @@ async def register(request: RegisterRequest):
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
-    data = load_data()
+    builder = get_builder_by_username(request.username)
+    if not builder:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    builder = next((b for b in data['builders'] if b['username'] == request.username), None)
-
-    stored = builder['password'] if builder else "sha256:x:x"
-    if not builder or not _check_password(request.password, stored):
+    stored = builder.get('password', "sha256:x:x")
+    if not _check_password(request.password, stored):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     # Migrate legacy plain-text password on successful login
-    if not builder['password'].startswith("sha256:"):
+    if not stored.startswith("sha256:"):
         builder['password'] = _hash_password(request.password)
+        upsert_builder(builder)
 
-    session_id = _make_session(data, request.username)
-    save_data(data)
+    session_id = str(uuid.uuid4())
+    save_session(session_id, request.username)
 
     profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
+    # Supabase returns datetime objects
+    for d in ['created_at', 'updated_at']:
+        if profile.get(d) and hasattr(profile[d], 'isoformat'):
+            profile[d] = profile[d].isoformat()
+
     return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
 
 
@@ -393,9 +292,11 @@ async def login(request: LoginRequest):
 
 @app.post("/profile/update")
 async def update_profile(request: UpdateProfileRequest):
-    data = load_data()
-    username = _get_session_username(data, request.session_id)
-    builder = next((b for b in data['builders'] if b['username'] == username), None)
+    username = get_session_username(request.session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    builder = get_builder_by_username(username)
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
 
@@ -405,20 +306,28 @@ async def update_profile(request: UpdateProfileRequest):
         if val is not None:
             builder[field] = val
 
-    builder['updated_at'] = datetime.now().isoformat()
-    save_data(data)
+    builder['updated_at'] = datetime.now()
+    upsert_builder(builder)
 
     profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
+    for d in ['created_at', 'updated_at']:
+        if profile.get(d) and hasattr(profile[d], 'isoformat'):
+            profile[d] = profile[d].isoformat()
+            
     return {"success": True, "profile": BuilderProfile(**profile)}
 
 
 @app.get("/profile/{username}", response_model=BuilderProfile)
 async def get_profile(username: str):
-    data = load_data()
-    builder = next((b for b in data['builders'] if b['username'] == username), None)
+    builder = get_builder_by_username(username)
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
+    
     profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
+    for d in ['created_at', 'updated_at']:
+        if profile.get(d) and hasattr(profile[d], 'isoformat'):
+            profile[d] = profile[d].isoformat()
+            
     return BuilderProfile(**profile)
 
 
@@ -433,48 +342,64 @@ async def discover_builders(
     filter_interest: Optional[str] = None,
     filter_availability: Optional[str] = None
 ):
-    data = load_data()
-    builders = list(data['builders'])
+    builders = get_builders()
 
+    current_username = None
     if session_id:
-        try:
-            current_username = _get_session_username(data, session_id)
+        current_username = get_session_username(session_id)
+        if current_username:
             builders = [b for b in builders if b['username'] != current_username]
-        except HTTPException:
-            pass
 
     if filter_interest:
-        builders = [b for b in builders if filter_interest in b.get('interests', [])]
+        builders = [b for b in builders if b.get('interests') and filter_interest in b.get('interests')]
     if filter_availability:
         builders = [b for b in builders if b.get('availability') == filter_availability]
 
     def sort_key(b):
         priority = 2 if b.get('availability') in ['this_weekend', 'this_month'] else (1 if b.get('current_idea') else 0)
-        return (priority, b.get('updated_at', ''))
+        # Handle datetime comparison safely
+        updated_at = b.get('updated_at')
+        updated_at_str = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else str(updated_at)
+        return (priority, updated_at_str)
 
     builders.sort(key=sort_key, reverse=True)
-    profiles = [{k: v for k, v in b.items() if k not in ('password', 'email')} for b in builders[:limit]]
-    return [BuilderProfile(**p) for p in profiles]
+    
+    profiles = []
+    for b in builders[:limit]:
+        p = {k: v for k, v in b.items() if k not in ('password', 'email')}
+        for d in ['created_at', 'updated_at']:
+            if p.get(d) and hasattr(p[d], 'isoformat'):
+                p[d] = p[d].isoformat()
+        profiles.append(BuilderProfile(**p))
+        
+    return profiles
 
 
 @app.post("/match/{target_username}", response_model=MatchResponse)
 async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False):
-    data = load_data()
-    current_username = _get_session_username(data, session_id)
+    current_username = get_session_username(session_id)
+    if not current_username:
+        raise HTTPException(status_code=401, detail="Invalid session")
 
-    current_builder = next((b for b in data['builders'] if b['username'] == current_username), None)
-    target_builder  = next((b for b in data['builders'] if b['username'] == target_username), None)
+    current_builder = get_builder_by_username(current_username)
+    target_builder  = get_builder_by_username(target_username)
 
     if not current_builder or not target_builder:
         raise HTTPException(status_code=404, detail="Builder not found")
 
+    # Match result from brain.py
     match_result = get_demo_match(current_username, target_username)
     if not match_result:
         match_result = find_build_matches(current_builder, target_builder, local_only=local_only)
+    
     if not match_result:
         raise HTTPException(status_code=500, detail="Failed to generate match")
 
     target_profile = {k: v for k, v in target_builder.items() if k not in ('password', 'email')}
+    for d in ['created_at', 'updated_at']:
+        if target_profile.get(d) and hasattr(target_profile[d], 'isoformat'):
+            target_profile[d] = target_profile[d].isoformat()
+
     return MatchResponse(
         matched_builder=BuilderProfile(**target_profile),
         chemistry_score=match_result['chemistry_score'],
@@ -490,12 +415,11 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
 
 @app.get("/health")
 async def health_check():
-    data = load_data()
+    builders = get_builders()
     return {
         "status": "ok",
         "version": "1.0.0",
-        "total_builders": len(data['builders']),
-        "active_sessions": len(data['sessions'])
+        "total_builders": len(builders),
     }
 
 @app.get("/")
