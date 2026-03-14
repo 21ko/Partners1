@@ -6,11 +6,12 @@ import uvicorn
 import os
 import json
 import uuid
+import hashlib
+import threading
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 
-# Import AI functions
 from brain import analyze_github_profile, find_build_matches, get_demo_match
 
 app = FastAPI(
@@ -19,14 +20,20 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-# CORS - allow all for development, restrict in production
+ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "https://partners1.vercel.app,http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production: ["https://partners.vercel.app"]
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+SESSION_TTL_DAYS = 30
 
 # ============================================
 # MODELS
@@ -48,7 +55,7 @@ class BuilderProfile(BaseModel):
     total_stars: int = 0
     public_repos: int = 0
     learning: List[str] = []
-    experience_level: str = "intermediate" # will change to beginer or keep it null testing on the landing 
+    experience_level: str = "intermediate"
     looking_for: str = "build_partner"
     created_at: str
     updated_at: str
@@ -89,22 +96,43 @@ class MatchResponse(BaseModel):
     why: str
     build_idea: str
 
+
 # ============================================
-# DATA STORAGE
+# PASSWORD HASHING
+# ============================================
+
+def _hash_password(password: str) -> str:
+    salt = os.urandom(16).hex()
+    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"sha256:{salt}:{hashed}"
+
+def _check_password(password: str, stored: str) -> bool:
+    if stored.startswith("sha256:"):
+        try:
+            _, salt, hashed = stored.split(":")
+            return hashlib.sha256((salt + password).encode()).hexdigest() == hashed
+        except Exception:
+            return False
+    return stored == password  # legacy plain-text
+
+
+# ============================================
+# DATA STORAGE  (thread-safe, no fcntl)
 # ============================================
 
 DATA_FILE = Path(__file__).parent / "builders.json"
+_write_lock = threading.Lock()  # in-process lock, works on Railway
+
 
 def init_data_file():
-    """Initialize with demo builders if file doesn't exist"""
     if not DATA_FILE.exists():
         demo_data = {
             "builders": [
                 {
                     "username": "alice",
-                    "password": "demo123",
+                    "password": _hash_password("demo123"),
                     "github_username": "alice-dev",
-                    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=alice", 
+                    "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=alice",
                     "bio": "Ships fast frontends and figures it out along the way",
                     "building_style": "ships_fast",
                     "interests": ["web apps", "AI tools", "UI/UX"],
@@ -124,7 +152,7 @@ def init_data_file():
                 },
                 {
                     "username": "bob",
-                    "password": "demo123",
+                    "password": _hash_password("demo123"),
                     "github_username": "bob-ml",
                     "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=bob",
                     "bio": "Turns ML research papers into production code",
@@ -152,90 +180,131 @@ def init_data_file():
 
 init_data_file()
 
-def load_data():
+
+def load_data() -> dict:
     with open(DATA_FILE, 'r') as f:
         data = json.load(f)
-        # Ensure all builders have required fields (migration for old data)
-        for b in data.get('builders', []):
-            if 'learning' not in b: b['learning'] = []
-            if 'experience_level' not in b: b['experience_level'] = 'intermediate'
-            if 'looking_for' not in b: b['looking_for'] = 'build_partner'
-            if 'interests' not in b: b['interests'] = []
-            if 'open_to' not in b: b['open_to'] = ["weekend projects", "hackathons"]
-            if 'building_style' not in b: b['building_style'] = "figures_it_out"
-            if 'github_languages' not in b: b['github_languages'] = []
-            if 'github_repos' not in b: b['github_repos'] = []
-            if 'total_stars' not in b: b['total_stars'] = 0
-            if 'public_repos' not in b: b['public_repos'] = 0
-            if 'avatar' not in b: b['avatar'] = f"https://api.dicebear.com/7.x/avataaars/svg?seed={b.get('username', 'anon')}"
-            if 'bio' not in b: b['bio'] = ""
-            if 'email' not in b: b['email'] = ""
-            if 'city' not in b: b['city'] = None
-        return data
 
-def save_data(data):
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+    for b in data.get('builders', []):
+        b.setdefault('learning', [])
+        b.setdefault('experience_level', 'intermediate')
+        b.setdefault('looking_for', 'build_partner')
+        b.setdefault('interests', [])
+        b.setdefault('open_to', ["weekend projects", "hackathons"])
+        b.setdefault('building_style', "figures_it_out")
+        b.setdefault('github_languages', [])
+        b.setdefault('github_repos', [])
+        b.setdefault('total_stars', 0)
+        b.setdefault('public_repos', 0)
+        b.setdefault('avatar', f"https://api.dicebear.com/7.x/avataaars/svg?seed={b.get('username','anon')}")
+        b.setdefault('bio', "")
+        b.setdefault('email', "")
+        b.setdefault('city', None)
+
+    # Purge expired sessions
+    cutoff = (datetime.now() - timedelta(days=SESSION_TTL_DAYS)).isoformat()
+    data['sessions'] = {
+        sid: s for sid, s in data.get('sessions', {}).items()
+        if isinstance(s, dict) and s.get('created_at', '') >= cutoff
+    }
+
+    return data
+
+
+def save_data(data: dict):
+    """Thread-safe write - no fcntl needed."""
+    with _write_lock:
+        with open(DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+
+
+def _get_session_username(data: dict, session_id: str) -> str:
+    session = data.get('sessions', {}).get(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    if isinstance(session, dict):
+        return session['username']
+    return session  # legacy plain string
+
+
+def _make_session(data: dict, username: str) -> str:
+    session_id = str(uuid.uuid4())
+    data['sessions'][session_id] = {
+        "username": username,
+        "created_at": datetime.now().isoformat()
+    }
+    return session_id
+
 
 # ============================================
 # GITHUB API
 # ============================================
 
 async def fetch_github_data(github_username: str) -> dict:
-    """Fetch public GitHub profile data"""
+    """Fetch GitHub profile. Language bytes = accurate, not just repo counts."""
     try:
         async with httpx.AsyncClient() as client:
-            # Get user profile
             profile_res = await client.get(
                 f"https://api.github.com/users/{github_username}",
                 headers={"Accept": "application/vnd.github.v3+json"},
                 timeout=10.0
             )
-            
             if profile_res.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"GitHub user '{github_username}' not found")
-            
             if profile_res.status_code != 200:
                 raise HTTPException(status_code=500, detail="GitHub API error")
-            
+
             profile = profile_res.json()
-            
-            # Get repositories
+
             repos_res = await client.get(
                 f"https://api.github.com/users/{github_username}/repos?sort=updated&per_page=10",
                 headers={"Accept": "application/vnd.github.v3+json"},
                 timeout=10.0
             )
             repos = repos_res.json() if repos_res.status_code == 200 else []
-            
-            # Aggregate languages
-            languages = {}
-            for repo_data in (repos if isinstance(repos, list) else [])[:5]:
-                repo: dict = repo_data if isinstance(repo_data, dict) else {}
-                lang = repo.get('language')
-                if lang:
-                    languages[lang] = languages.get(lang, 0) + 1
-            
+            if not isinstance(repos, list):
+                repos = []
+
+            # Aggregate language bytes across repos (accurate signal for matching)
+            lang_bytes: dict = {}
+            for repo in repos[:5]:
+                if not isinstance(repo, dict) or not repo.get('name'):
+                    continue
+                lang_res = await client.get(
+                    f"https://api.github.com/repos/{github_username}/{repo['name']}/languages",
+                    headers={"Accept": "application/vnd.github.v3+json"},
+                    timeout=5.0
+                )
+                if lang_res.status_code == 200:
+                    for lang, byte_count in lang_res.json().items():
+                        lang_bytes[lang] = lang_bytes.get(lang, 0) + byte_count
+
+            top_languages = sorted(lang_bytes, key=lang_bytes.get, reverse=True)[:5]
+
             return {
                 "github_username": github_username,
                 "avatar": profile.get("avatar_url", f"https://github.com/{github_username}.png"),
-                "bio": profile.get("bio", ""),
-                "github_languages": sorted(languages.keys(), key=languages.get, reverse=True)[:5],
+                "bio": profile.get("bio", "") or "",
+                "github_languages": top_languages,
                 "github_repos": [
-                    {²
-                        "name": r.get("name", "unknown"),
+                    {
+                        "name": r.get("name", ""),
                         "description": r.get("description", ""),
                         "stars": r.get("stargazers_count", 0),
                         "language": r.get("language", "")
                     }
-                    for r in (repos if isinstance(repos, list) else [])[:5]
+                    for r in repos[:5] if isinstance(r, dict)
                 ],
-                "total_stars": sum(r.get("stargazers_count", 0) if isinstance(r, dict) else 0 for r in (repos if isinstance(repos, list) else [])),
+                "total_stars": sum(
+                    r.get("stargazers_count", 0) for r in repos if isinstance(r, dict)
+                ),
                 "public_repos": profile.get("public_repos", 0)
             }
+
+    except HTTPException:
+        raise
     except httpx.HTTPError as e:
-        print(f"GitHub fetch error: {e}")
-        # Return minimal data if GitHub fetch fails
+        print(f"[main] GitHub fetch error: {type(e).__name__}")
         return {
             "github_username": github_username,
             "avatar": f"https://github.com/{github_username}.png",
@@ -246,46 +315,37 @@ async def fetch_github_data(github_username: str) -> dict:
             "public_repos": 0
         }
 
+
 # ============================================
-# AUTH ENDPOINTS
+# AUTH
 # ============================================
 
 @app.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
-    """Register new builder"""
     data = load_data()
-    
-    # Check if username exists
+
     if any(b['username'] == request.username for b in data['builders']):
         raise HTTPException(status_code=400, detail="Username already taken")
-    
-    # Fetch GitHub data
+
     github_data = await fetch_github_data(request.github_username)
-    
-    # Determine if onboarding is needed (empty GitHub)
     has_activity = len(github_data['github_repos']) > 0 or github_data['public_repos'] > 2
-    
-    # Generate bio if GitHub bio is empty
+
     bio = github_data['bio']
     if not bio or len(bio) < 10:
-        if has_activity:
-            bio = analyze_github_profile(github_data)
-        else:
-            bio = "Builder looking to make things"
-    
-    # Create builder profile
+        bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
+
     now = datetime.now().isoformat()
     new_builder = {
         "username": request.username,
-        "password": request.password,  # TODO: hash in production!
+        "password": _hash_password(request.password),
         **github_data,
         "bio": bio,
-        "building_style": "figures_it_out",  # Default
+        "building_style": "figures_it_out",
         "interests": [],
         "open_to": ["weekend projects", "hackathons"],
         "availability": "open",
         "current_idea": None,
-        "email": request.email,
+        "email": request.email or "",
         "city": request.city or None,
         "learning": [],
         "experience_level": "intermediate",
@@ -293,104 +353,74 @@ async def register(request: RegisterRequest):
         "created_at": now,
         "updated_at": now
     }
-    
+
     data['builders'].append(new_builder)
-    
-    # Create session
-    session_id = str(uuid.uuid4())
-    data['sessions'][session_id] = request.username
-    
+    session_id = _make_session(data, request.username)
     save_data(data)
-    
-    # Remove password from response
-    profile = {k: v for k, v in new_builder.items() if k != 'password'}
-    
+
+    profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
     return AuthResponse(
         session_id=session_id,
         profile=BuilderProfile(**profile),
         needs_onboarding=not has_activity
     )
 
+
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
-    """Login existing builder"""
     data = load_data()
-    
+
     builder = next((b for b in data['builders'] if b['username'] == request.username), None)
-    
-    if not builder or builder['password'] != request.password:
+
+    stored = builder['password'] if builder else "sha256:x:x"
+    if not builder or not _check_password(request.password, stored):
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    
-    # Create session
-    session_id = str(uuid.uuid4())
-    data['sessions'][session_id] = request.username
+
+    # Migrate legacy plain-text password on successful login
+    if not builder['password'].startswith("sha256:"):
+        builder['password'] = _hash_password(request.password)
+
+    session_id = _make_session(data, request.username)
     save_data(data)
-    
-    profile = {k: v for k, v in builder.items() if k != 'password'}
-    
-    return AuthResponse(
-        session_id=session_id,
-        profile=BuilderProfile(**profile),
-        needs_onboarding=False
-    )
+
+    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
+    return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
+
 
 # ============================================
-# PROFILE ENDPOINTS
+# PROFILE
 # ============================================
 
 @app.post("/profile/update")
 async def update_profile(request: UpdateProfileRequest):
-    """Update builder profile"""
     data = load_data()
-    
-    # Verify session
-    if request.session_id not in data['sessions']:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    username = data['sessions'][request.session_id]
+    username = _get_session_username(data, request.session_id)
     builder = next((b for b in data['builders'] if b['username'] == username), None)
-    
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
-    
-    # Update fields
-    if request.building_style:
-        builder['building_style'] = request.building_style
-    if request.interests is not None:
-        builder['interests'] = request.interests
-    if request.open_to is not None:
-        builder['open_to'] = request.open_to
-    if request.availability:
-        builder['availability'] = request.availability
-    if request.current_idea is not None:
-        builder['current_idea'] = request.current_idea
-    if request.city:
-        builder['city'] = request.city
-    if request.learning is not None:
-        builder['learning'] = request.learning
-    if request.experience_level:
-        builder['experience_level'] = request.experience_level
-    if request.looking_for:
-        builder['looking_for'] = request.looking_for
-    
+
+    for field in ['building_style', 'interests', 'open_to', 'availability',
+                  'current_idea', 'city', 'learning', 'experience_level', 'looking_for']:
+        val = getattr(request, field, None)
+        if val is not None:
+            builder[field] = val
+
     builder['updated_at'] = datetime.now().isoformat()
-    
     save_data(data)
-    
-    profile = {k: v for k, v in builder.items() if k != 'password'}
+
+    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
     return {"success": True, "profile": BuilderProfile(**profile)}
+
 
 @app.get("/profile/{username}", response_model=BuilderProfile)
 async def get_profile(username: str):
-    """Get public builder profile"""
     data = load_data()
     builder = next((b for b in data['builders'] if b['username'] == username), None)
-    
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
-    
-    profile = {k: v for k, v in builder.items() if k != 'password'}
+    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
     return BuilderProfile(**profile)
+
 
 # ============================================
 # DISCOVERY & MATCHING
@@ -403,70 +433,48 @@ async def discover_builders(
     filter_interest: Optional[str] = None,
     filter_availability: Optional[str] = None
 ):
-    """Browse all active builders"""
     data = load_data()
-    
-    builders = [b for b in data['builders']]
-    
-    # Exclude current user if authenticated
-    if session_id and session_id in data['sessions']:
-        current_username = data['sessions'][session_id]
-        builders = [b for b in builders if b['username'] != current_username]
-    
-    # Apply filters
+    builders = list(data['builders'])
+
+    if session_id:
+        try:
+            current_username = _get_session_username(data, session_id)
+            builders = [b for b in builders if b['username'] != current_username]
+        except HTTPException:
+            pass
+
     if filter_interest:
         builders = [b for b in builders if filter_interest in b.get('interests', [])]
-    
     if filter_availability:
         builders = [b for b in builders if b.get('availability') == filter_availability]
-    
-    # Sort: actively building > recently updated
+
     def sort_key(b):
-        priority = 0
-        if b.get('availability') in ['this_weekend', 'this_month']:
-            priority = 2
-        elif b.get('current_idea'):
-            priority = 1
+        priority = 2 if b.get('availability') in ['this_weekend', 'this_month'] else (1 if b.get('current_idea') else 0)
         return (priority, b.get('updated_at', ''))
-    
+
     builders.sort(key=sort_key, reverse=True)
-    
-    # Remove passwords
-    profiles = [{k: v for k, v in b.items() if k != 'password'} for b in builders[:limit]]
-    
+    profiles = [{k: v for k, v in b.items() if k not in ('password', 'email')} for b in builders[:limit]]
     return [BuilderProfile(**p) for p in profiles]
+
 
 @app.post("/match/{target_username}", response_model=MatchResponse)
 async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False):
-    """Get AI match analysis between current user and target"""
     data = load_data()
-    
-    # Verify session
-    if session_id not in data['sessions']:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    current_username = data['sessions'][session_id]
-    
+    current_username = _get_session_username(data, session_id)
+
     current_builder = next((b for b in data['builders'] if b['username'] == current_username), None)
-    target_builder = next((b for b in data['builders'] if b['username'] == target_username), None)
-    
+    target_builder  = next((b for b in data['builders'] if b['username'] == target_username), None)
+
     if not current_builder or not target_builder:
         raise HTTPException(status_code=404, detail="Builder not found")
-    
-    # Try demo match first (instant, zero cost)
-    demo_result = get_demo_match(current_username, target_username)
-    
-    if demo_result:
-        match_result = demo_result
-    else:
-        # Call AI matching (uses API)
+
+    match_result = get_demo_match(current_username, target_username)
+    if not match_result:
         match_result = find_build_matches(current_builder, target_builder, local_only=local_only)
-    
     if not match_result:
         raise HTTPException(status_code=500, detail="Failed to generate match")
-    
-    target_profile = {k: v for k, v in target_builder.items() if k != 'password'}
-    
+
+    target_profile = {k: v for k, v in target_builder.items() if k not in ('password', 'email')}
     return MatchResponse(
         matched_builder=BuilderProfile(**target_profile),
         chemistry_score=match_result['chemistry_score'],
@@ -475,13 +483,13 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
         build_idea=match_result['build_idea']
     )
 
+
 # ============================================
-# HEALTH CHECK
+# HEALTH
 # ============================================
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway"""
     data = load_data()
     return {
         "status": "ok",
@@ -492,17 +500,8 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
-    return {
-        "name": "Partners API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    return {"name": "Partners API", "version": "1.0.0", "docs": "/docs", "health": "/health"}
 
-# ============================================
-# SERVER
-# ============================================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
