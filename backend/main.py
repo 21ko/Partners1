@@ -101,6 +101,31 @@ class MatchResponse(BaseModel):
     build_idea: str
 
 
+class Community(BaseModel):
+    id: str
+    name: str
+    description: str
+    type: str
+    host_username: Optional[str] = None
+    created_at: str
+
+
+class CreateCommunityRequest(BaseModel):
+    session_id: str
+    name: str
+    description: str
+    type: str = 'general'
+
+
+class JoinCommunityRequest(BaseModel):
+    session_id: str
+
+
+class CommunityMemberResponse(BaseModel):
+    community_id: str
+    members: List[BuilderProfile]
+
+
 # ============================================
 # PASSWORD HASHING
 # ============================================
