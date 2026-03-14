@@ -1,50 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Builder } from '../types';
-
-// Static community directory — real builders will come from /discover
-const COMMUNITY_BUILDERS: Builder[] = [
-  {
-    username: 'marco_infra',
-    github_username: 'marcorossi',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=marco',
-    bio: 'Ex-Stripe engineer. Obsessed with infra that actually holds up at scale.',
-    building_style: 'plans_first',
-    interests: ['backend', 'infrastructure', 'fintech'],
-    open_to: ['weekend projects', 'hackathons'],
-    availability: 'this_weekend',
-    github_languages: ['Go', 'Node.js', 'PostgreSQL'],
-    github_repos: [],
-    total_stars: 210,
-    public_repos: 12,
-    city: 'Milan',
-    learning: ['Rust', 'Wasm'],
-    experience_level: 'advanced',
-    looking_for: 'build_partner',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    username: 'sarah_ux',
-    github_username: 'sarahjin',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
-    bio: 'Design system lover. Making software feel human, one component at a time.',
-    building_style: 'designs_first',
-    interests: ['design systems', 'mobile', 'web apps'],
-    open_to: ['weekend projects', 'freelance'],
-    availability: 'this_month',
-    github_languages: ['TypeScript', 'React', 'Figma'],
-    github_repos: [],
-    total_stars: 89,
-    public_repos: 24,
-    city: 'Seoul',
-    learning: ['Framer Motion', 'Three.js'],
-    experience_level: 'intermediate',
-    looking_for: 'build_partner',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
+import { authService, API_URL, safeJson } from '../services/authService';
 
 const AVAILABILITY_LABELS: Record<string, string> = {
   this_weekend: '🟢 THIS_WEEKEND',
@@ -54,9 +11,27 @@ const AVAILABILITY_LABELS: Record<string, string> = {
 };
 
 const Explore: React.FC = () => {
+  const [builders, setBuilders] = useState<Builder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const filtered = (COMMUNITY_BUILDERS || []).filter((b) => {
+  useEffect(() => {
+    const fetchBuilders = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/discover`);
+        const data = await safeJson(res);
+        setBuilders(data);
+      } catch (e) {
+        console.error('Failed to fetch builders', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBuilders();
+  }, []);
+
+  const filtered = (builders || []).filter((b) => {
     const s = (search || '').toLowerCase();
     const username = (b.username || '').toLowerCase();
     const bio = (b.bio || '').toLowerCase();
@@ -85,31 +60,50 @@ const Explore: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((builder, i) => (
-          <motion.div
-            key={builder.username || i}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.05 }}
-            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-4 hover:border-slate-700 transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <img src={builder.avatar} className="w-12 h-12 rounded-lg border border-slate-800" alt="" />
-              <div>
-                <div className="font-bold text-white text-sm">@{builder.username || 'builder'}</div>
-                <div className="text-[9px] font-mono text-terminal-green">{AVAILABILITY_LABELS[builder.availability] || 'OPEN'}</div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-40 bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-24 bg-slate-900/20 rounded-3xl border border-slate-800 border-dashed">
+          <p className="text-slate-500 font-mono text-sm uppercase tracking-widest">No_Builders_Detected_In_Sector</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((builder, i) => (
+            <motion.div
+              key={builder.username || i}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.05 }}
+              className="p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-4 hover:border-slate-700 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <img 
+                  src={builder.avatar} 
+                  className="w-12 h-12 rounded-lg border border-slate-800" 
+                  alt="" 
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${builder.username}`;
+                  }}
+                />
+                <div>
+                  <div className="font-bold text-white text-sm">@{builder.username || 'builder'}</div>
+                  <div className="text-[9px] font-mono text-terminal-green">{AVAILABILITY_LABELS[builder.availability] || 'OPEN'}</div>
+                </div>
               </div>
-            </div>
-            <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 italic">"{builder.bio || ''}"</p>
-            <div className="flex flex-wrap gap-1">
-              {(builder.github_languages || []).slice(0, 3).map(l => (
-                <span key={l} className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded uppercase">{l}</span>
-              ))}
-            </div>
-          </motion.div>
-        ))}
-      </div>
+              <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 italic">"{builder.bio || ''}"</p>
+              <div className="flex flex-wrap gap-1">
+                {(builder.github_languages || []).slice(0, 3).map(l => (
+                  <span key={l} className="text-[8px] font-mono font-bold px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded uppercase">{l}</span>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
