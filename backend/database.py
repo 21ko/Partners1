@@ -80,3 +80,58 @@ def delete_expired_sessions(days=30):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM sessions WHERE created_at < %s", (cutoff,))
         conn.commit()
+
+# Helper for communities
+def create_community(name: str, description: str, host_username: str = None, type: str = 'general'):
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO communities (name, description, host_username, type)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (name, description, host_username, type))
+            res = cur.fetchone()
+            conn.commit()
+            return res['id']
+
+def get_communities():
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM communities ORDER BY created_at DESC")
+            return cur.fetchall()
+
+def get_community_by_id(community_id: str):
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM communities WHERE id = %s", (community_id,))
+            return cur.fetchone()
+
+def join_community(community_id: str, username: str):
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO community_members (community_id, username)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+            """, (community_id, username))
+        conn.commit()
+
+def get_community_members(community_id: str):
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT b.* FROM builders b
+                JOIN community_members cm ON b.username = cm.username
+                WHERE cm.community_id = %s
+            """, (community_id,))
+            return cur.fetchall()
+
+def get_user_communities(username: str):
+    with get_db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.* FROM communities c
+                JOIN community_members cm ON c.id = cm.community_id
+                WHERE cm.username = %s
+            """, (username,))
+            return cur.fetchall()

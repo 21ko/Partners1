@@ -245,6 +245,15 @@ async def register(request: RegisterRequest):
     }
 
     upsert_builder(new_builder)
+    
+    # Auto-join city community if it exists
+    if request.city:
+        all_comms = get_communities()
+        city_comm = next((c for c in all_comms if c['type'] == 'city' and request.city.lower() in c['name'].lower()), None)
+        if city_comm:
+            from database import join_community
+            join_community(city_comm['id'], request.username)
+
     session_id = str(uuid.uuid4())
     save_session(session_id, request.username)
 
@@ -338,11 +347,16 @@ async def get_profile(username: str):
 @app.get("/discover", response_model=List[BuilderProfile])
 async def discover_builders(
     session_id: Optional[str] = None,
+    community_id: Optional[str] = None,
     limit: int = 20,
     filter_interest: Optional[str] = None,
     filter_availability: Optional[str] = None
 ):
-    builders = get_builders()
+    if community_id:
+        from database import get_community_members
+        builders = get_community_members(community_id)
+    else:
+        builders = get_builders()
 
     current_username = None
     if session_id:
@@ -376,7 +390,7 @@ async def discover_builders(
 
 
 @app.post("/match/{target_username}", response_model=MatchResponse)
-async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False):
+async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False, community_id: Optional[str] = None):
     current_username = get_session_username(session_id)
     if not current_username:
         raise HTTPException(status_code=401, detail="Invalid session")
@@ -390,6 +404,8 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
     # Match result from brain.py
     match_result = get_demo_match(current_username, target_username)
     if not match_result:
+        # If community_id is provided, we could pass it to find_build_matches 
+        # for extra context (e.g. hackathon matching), but brain.py doesn't support it yet.
         match_result = find_build_matches(current_builder, target_builder, local_only=local_only)
     
     if not match_result:
@@ -418,9 +434,58 @@ async def health_check():
     builders = get_builders()
     return {
         "status": "ok",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "total_builders": len(builders),
     }
+
+# ============================================
+# COMMUNITY ENDPOINTS
+# ============================================
+
+@app.get("/communities", response_model=List[Community])
+async def list_communities():
+    from database import get_communities
+    comms = get_communities()
+    for c in comms:
+        if hasattr(c['created_at'], 'isoformat'):
+            c['created_at'] = c['created_at'].isoformat()
+    return [Community(**c) for c in comms]
+
+@app.post("/communities", response_model=Community)
+async def create_new_community(request: CreateCommunityRequest):
+    username = get_session_username(request.session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    from database import create_community, get_community_by_id
+    cid = create_community(request.name, request.description, username, request.type)
+    comm = get_community_by_id(cid)
+    if hasattr(comm['created_at'], 'isoformat'):
+        comm['created_at'] = comm['created_at'].isoformat()
+    return Community(**comm)
+
+@app.post("/communities/{community_id}/join")
+async def join_comm(community_id: str, request: JoinCommunityRequest):
+    username = get_session_username(request.session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    from database import join_community
+    join_community(community_id, username)
+    return {"success": True}
+
+@app.get("/communities/{community_id}/members", response_model=CommunityMemberResponse)
+async def list_members(community_id: str):
+    from database import get_community_members
+    builders = get_community_members(community_id)
+    profiles = []
+    for b in builders:
+        p = {k: v for k, v in b.items() if k not in ('password', 'email')}
+        for d in ['created_at', 'updated_at']:
+            if p.get(d) and hasattr(p[d], 'isoformat'):
+                p[d] = p[d].isoformat()
+        profiles.append(BuilderProfile(**p))
+    return CommunityMemberResponse(community_id=community_id, members=profiles)
 
 @app.get("/")
 async def root():
