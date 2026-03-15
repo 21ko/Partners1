@@ -26,17 +26,10 @@ app = FastAPI(
 )
 
 # Robust CORS for debugging and production
-ALLOWED_ORIGINS = [
-    "*",
-    "https://partners1.vercel.app",
-    "https://partners1-21ko.vercel.app",
-    "https://partners1-nvvr49ueb-21kos-projects.vercel.app"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=False, # Must be False if using "*"
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,9 +39,25 @@ async def global_exception_handler(request, exc):
     import traceback
     print(f"GLOBAL_ERROR: {exc}")
     traceback.print_exc()
+    
+    status_code = 500
+    detail = "Internal Server Error"
+    
+    if hasattr(exc, "status_code"):
+        status_code = exc.status_code
+    if hasattr(exc, "detail"):
+        detail = exc.detail
+        
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
+    
     return JSONResponse(
-        status_code=500,
-        content={"status": "error", "detail": "Internal Server Error", "msg": str(exc)},
+        status_code=status_code,
+        content={"status": "error", "detail": detail, "msg": str(exc)},
+        headers=headers
     )
 
 SESSION_TTL_DAYS = 30
@@ -309,6 +318,7 @@ async def register(request: RegisterRequest):
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
+    print(f"[AUTH] Login attempt: {request.username}")
     builder = get_builder_by_username(request.username)
     if not builder:
         raise HTTPException(status_code=401, detail="Invalid username or password")
@@ -325,11 +335,15 @@ async def login(request: LoginRequest):
     session_id = str(uuid.uuid4())
     save_session(session_id, request.username)
 
-    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
-    # Supabase returns datetime objects
-    for d in ['created_at', 'updated_at']:
-        if profile.get(d) and hasattr(profile[d], 'isoformat'):
-            profile[d] = profile[d].isoformat()
+    # Convert to a clean dict and handle all non-JSON types
+    profile_data = dict(builder)
+    profile = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
+    
+    for key, val in profile.items():
+        if hasattr(val, 'isoformat'):
+            profile[key] = val.isoformat()
+        elif isinstance(val, uuid.UUID):
+            profile[key] = str(val)
 
     return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
 
