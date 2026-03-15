@@ -7,3 +7,4 @@ uuid
 httpx
 supabase
 psycopg2-binary
+resend
