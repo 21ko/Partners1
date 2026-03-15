@@ -563,7 +563,19 @@ async def debug_system():
     
     # 1. Test Database
     try:
-        from database import get_db_conn, get_builders
+        from database import get_db_conn, get_builders, DB_URL
+        
+        # Mask DB_URL for safe debugging
+        masked_url = DB_URL
+        if "@" in masked_url:
+            prefix, rest = masked_url.split("@", 1)
+            if "://" in prefix:
+                proto, credentials = prefix.split("://", 1)
+                if ":" in credentials:
+                    user, _ = credentials.split(":", 1)
+                    masked_url = f"{proto}://{user}:****@{rest}"
+        results["database"]["masked_url"] = masked_url
+
         conn = get_db_conn()
         results["database"]["connection"] = "success"
         
