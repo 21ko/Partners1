@@ -5,36 +5,36 @@ import { authService, API_URL, safeJson } from '../services/authService';
 
 const AVAILABILITY_LABELS: Record<string, string> = {
   this_weekend: '🟢 THIS_WEEKEND',
-  this_month: '🟡 THIS_MONTH',
-  open: '🔵 OPEN_FOR_COLLAB',
-  busy: '🔴 BUSY_SHIPPING',
+  this_month:   '🟡 THIS_MONTH',
+  open:         '🔵 OPEN_FOR_COLLAB',
+  busy:         '🔴 BUSY_SHIPPING',
 };
 
 const TYPE_STYLES: Record<string, { border: string; badge: string; dot: string }> = {
   hackathon: {
     border: 'border-terminal-green/40 hover:border-terminal-green',
-    badge: 'bg-terminal-green/10 text-terminal-green border-terminal-green/30',
-    dot: 'bg-terminal-green',
+    badge:  'bg-terminal-green/10 text-terminal-green border-terminal-green/30',
+    dot:    'bg-terminal-green',
   },
   interest: {
     border: 'border-terminal-blue/40 hover:border-terminal-blue',
-    badge: 'bg-terminal-blue/10 text-terminal-blue border-terminal-blue/30',
-    dot: 'bg-terminal-blue',
+    badge:  'bg-terminal-blue/10 text-terminal-blue border-terminal-blue/30',
+    dot:    'bg-terminal-blue',
   },
   stack: {
     border: 'border-purple-500/40 hover:border-purple-400',
-    badge: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-    dot: 'bg-purple-400',
+    badge:  'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    dot:    'bg-purple-400',
   },
   design: {
     border: 'border-pink-500/40 hover:border-pink-400',
-    badge: 'bg-pink-500/10 text-pink-400 border-pink-500/30',
-    dot: 'bg-pink-400',
+    badge:  'bg-pink-500/10 text-pink-400 border-pink-500/30',
+    dot:    'bg-pink-400',
   },
   general: {
     border: 'border-slate-700 hover:border-slate-600',
-    badge: 'bg-slate-800 text-slate-400 border-slate-700',
-    dot: 'bg-slate-500',
+    badge:  'bg-slate-800 text-slate-400 border-slate-700',
+    dot:    'bg-slate-500',
   },
 };
 
@@ -48,16 +48,16 @@ interface Community {
 }
 
 const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActiveTab }) => {
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [loadingComms, setLoadingComms] = useState(true);
-  const [selectedComm, setSelectedComm] = useState<Community | null>(null);
-  const [members, setMembers] = useState<Builder[]>([]);
+  const [communities, setCommunities]       = useState<Community[]>([]);
+  const [loadingComms, setLoadingComms]     = useState(true);
+  const [selectedComm, setSelectedComm]     = useState<Community | null>(null);
+  const [members, setMembers]               = useState<Builder[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
-  const [joiningId, setJoiningId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [matchLoading, setMatchLoading] = useState<string | null>(null);
-  const [matchResult, setMatchResult] = useState<any | null>(null);
+  const [joinedIds, setJoinedIds]           = useState<Set<string>>(new Set());
+  const [joiningId, setJoiningId]           = useState<string | null>(null);
+  const [search, setSearch]                 = useState('');
+  const [matchLoading, setMatchLoading]     = useState<string | null>(null);
+  const [matchResult, setMatchResult]       = useState<any | null>(null);
   const [matchedBuilder, setMatchedBuilder] = useState<Builder | null>(null);
 
   const session = authService.getSession();
@@ -67,7 +67,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
     const load = async () => {
       setLoadingComms(true);
       try {
-        const res = await fetch(`${API_URL}/communities`);
+        const res  = await fetch(`${API_URL}/communities`);
         const data = await safeJson(res);
         setCommunities(data);
       } catch (e) {
@@ -86,7 +86,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
     setMatchResult(null);
     setLoadingMembers(true);
     try {
-      const res = await fetch(`${API_URL}/communities/${comm.id}/members`);
+      const res  = await fetch(`${API_URL}/communities/${comm.id}/members`);
       const data = await safeJson(res);
       setMembers(data.members || []);
     } catch (e) {
@@ -121,7 +121,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
     setMatchResult(null);
     setMatchedBuilder(builder);
     try {
-      const res = await fetch(
+      const res  = await fetch(
         `${API_URL}/match/${builder.username}?session_id=${session.session_id}`,
         { method: 'POST' }
       );
@@ -135,7 +135,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
   };
 
   // ── split communities ──────────────────────────────────────────
-  const hackathons = communities.filter(c => c.type === 'hackathon');
+  const hackathons  = communities.filter(c => c.type === 'hackathon');
   const regularComms = communities.filter(c => c.type !== 'hackathon');
 
   // ── member search (frontend filter) ───────────────────────────
@@ -465,10 +465,11 @@ const HackathonCard: React.FC<CardProps> = ({ comm, delay, joined, joining, onOp
           <button
             onClick={onJoin}
             disabled={joined || joining}
-            className={`text-[10px] font-mono font-black px-4 py-1.5 rounded-lg transition-all ${joined
+            className={`text-[10px] font-mono font-black px-4 py-1.5 rounded-lg transition-all ${
+              joined
                 ? 'text-terminal-green border border-terminal-green/30 cursor-default'
                 : 'bg-terminal-green text-[#0A0F1C] hover:opacity-90'
-              }`}
+            }`}
           >
             {joining ? '...' : joined ? '✓ JOINED' : 'JOIN'}
           </button>
@@ -522,10 +523,11 @@ const CommunityCard: React.FC<CardProps> = ({ comm, delay, joined, joining, onOp
           <button
             onClick={onJoin}
             disabled={joined || joining}
-            className={`text-[9px] font-mono font-black px-3 py-1 rounded-lg border transition-all ${joined
+            className={`text-[9px] font-mono font-black px-3 py-1 rounded-lg border transition-all ${
+              joined
                 ? `${s.badge} cursor-default`
                 : `${s.badge} hover:opacity-80`
-              }`}
+            }`}
           >
             {joining ? '...' : joined ? '✓ JOINED' : '+ JOIN'}
           </button>
