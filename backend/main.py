@@ -26,7 +26,7 @@ app = FastAPI(
 
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
-    "https://partners1.vercel.app,http://localhost:5173"
+    "https://partners1.vercel.app,https://partners1-21ko.vercel.app,http://localhost:5173"
 ).split(",")
 
 app.add_middleware(
@@ -36,6 +36,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import traceback
+    print(f"GLOBAL_ERROR: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "detail": "Internal Server Error", "msg": str(exc)},
+    )
+
+from fastapi.responses import JSONResponse
 
 SESSION_TTL_DAYS = 30
 

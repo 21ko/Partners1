@@ -1,19 +1,12 @@
 import { Builder, AuthResponse, Session } from '../types';
 
 export const getApiUrl = () => {
-    let url = 'http://localhost:8000';
-    try {
-        if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-            if ((import.meta as any).env.VITE_API_URL) url = (import.meta as any).env.VITE_API_URL;
-        }
-        if (url === 'http://localhost:8000' && typeof process !== 'undefined' && (process as any).env && (process as any).env.VITE_API_URL) {
-            url = (process as any).env.VITE_API_URL;
-        }
-    } catch (e) {
-        console.warn('Error resolving API URL:', e);
-    }
-    // Normalize: remove trailing slash
-    return url.replace(/\/$/, '');
+    // Vite handles VITE_API_URL injection at build time.
+    const envUrl = (import.meta as any).env.VITE_API_URL;
+    if (envUrl) return envUrl.replace(/\/$/, '');
+    
+    // Fallback for local dev if not defined in .env
+    return 'http://localhost:8000';
 };
 
 export const API_URL = getApiUrl();
