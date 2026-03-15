@@ -1,22 +1,26 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
 import os
 import json
 import uuid
-import hashlib
-import threading
-from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import httpx
 
 from brain import analyze_github_profile, find_build_matches, get_demo_match
-from database import (
-    get_builders, get_builder_by_username, upsert_builder,
-    save_session, get_session_username, delete_expired_sessions
+from emails import send_match_notification, send_welcome_email
+from db import (
+    get_builders,
+    get_builder_by_username,
+    upsert_builder,
+    save_session,
+    get_session_username,
+    get_communities,
+    get_community_by_id,
+    get_community_members,
+    join_community as db_join_community,
 )
 
 app = FastAPI(
@@ -25,42 +29,13 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-# Robust CORS for debugging and production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    import traceback
-    print(f"GLOBAL_ERROR: {exc}")
-    traceback.print_exc()
-    
-    status_code = 500
-    detail = "Internal Server Error"
-    
-    if hasattr(exc, "status_code"):
-        status_code = exc.status_code
-    if hasattr(exc, "detail"):
-        detail = exc.detail
-        
-    headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-    }
-    
-    return JSONResponse(
-        status_code=status_code,
-        content={"status": "error", "detail": detail, "msg": str(exc)},
-        headers=headers
-    )
-
-SESSION_TTL_DAYS = 30
 
 # ============================================
 # MODELS
@@ -68,13 +43,13 @@ SESSION_TTL_DAYS = 30
 
 class BuilderProfile(BaseModel):
     username: str
-    github_username: str = ""
-    avatar: str = ""
-    bio: str = ""
-    building_style: str = "figures_it_out"
-    interests: List[str] = []
-    open_to: List[str] = []
-    availability: str = "open"
+    github_username: str
+    avatar: str
+    bio: str
+    building_style: str
+    interests: List[str]
+    open_to: List[str]
+    availability: str
     current_idea: Optional[str] = None
     city: Optional[str] = None
     github_languages: List[str] = []
@@ -84,8 +59,8 @@ class BuilderProfile(BaseModel):
     learning: List[str] = []
     experience_level: str = "intermediate"
     looking_for: str = "build_partner"
-    created_at: str = ""
-    updated_at: str = ""
+    created_at: str
+    updated_at: str
 
 class RegisterRequest(BaseModel):
     username: str
@@ -123,65 +98,69 @@ class MatchResponse(BaseModel):
     why: str
     build_idea: str
 
-
-class Community(BaseModel):
+class CommunityResponse(BaseModel):
     id: str
     name: str
     description: str
     type: str
-    host_username: Optional[str] = None
-    created_at: str
-    members_count: int = 0
-
-
-class CreateCommunityRequest(BaseModel):
-    session_id: str
-    name: str
-    description: str
-    type: str = 'general'
-
+    members_count: int
 
 class JoinCommunityRequest(BaseModel):
     session_id: str
 
-
-class CommunityMemberResponse(BaseModel):
-    community_id: str
-    members: List[BuilderProfile]
-
-
 # ============================================
-# PASSWORD HASHING
+# HELPERS
 # ============================================
 
-def _hash_password(password: str) -> str:
-    salt = os.urandom(16).hex()
-    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
-    return f"sha256:{salt}:{hashed}"
-
-def _check_password(password: str, stored: str) -> bool:
-    if stored.startswith("sha256:"):
+def _row_to_dict(row) -> dict:
+    """Convert a psycopg2 RealDictRow to a plain dict with safe defaults."""
+    if row is None:
+        return None
+    d = dict(row)
+    # github_repos comes back as string from JSONB — parse it
+    if isinstance(d.get('github_repos'), str):
         try:
-            _, salt, hashed = stored.split(":")
-            return hashlib.sha256((salt + password).encode()).hexdigest() == hashed
+            d['github_repos'] = json.loads(d['github_repos'])
         except Exception:
-            return False
-    return stored == password  # legacy plain-text
+            d['github_repos'] = []
+    # Ensure list fields are never None
+    for field in ['interests', 'open_to', 'github_languages', 'learning']:
+        if d.get(field) is None:
+            d[field] = []
+    # Safe defaults
+    d.setdefault('bio', '')
+    d.setdefault('building_style', 'figures_it_out')
+    d.setdefault('availability', 'open')
+    d.setdefault('experience_level', 'intermediate')
+    d.setdefault('looking_for', 'build_partner')
+    d.setdefault('total_stars', 0)
+    d.setdefault('public_repos', 0)
+    d.setdefault('github_repos', [])
+    d.setdefault('city', None)
+    d.setdefault('current_idea', None)
+    if not d.get('avatar'):
+        d['avatar'] = f"https://api.dicebear.com/7.x/avataaars/svg?seed={d.get('username', 'anon')}"
+    # Ensure datetimes are strings
+    for field in ['created_at', 'updated_at']:
+        if d.get(field) and not isinstance(d[field], str):
+            d[field] = d[field].isoformat()
+    return d
 
 
-# ============================================
-# DATA STORAGE  (thread-safe, no fcntl)
-# ============================================
-
-# Sessions are now handled in database
-
+def _safe_profile(row) -> BuilderProfile:
+    """Convert a DB row to a BuilderProfile, stripping sensitive fields."""
+    if row is None:
+        return None
+    d = _row_to_dict(row) if not isinstance(row, dict) else row.copy()
+    d.pop('password', None)
+    d.pop('email', None)
+    return BuilderProfile(**d)
 
 # ============================================
 # GITHUB API
 # ============================================
 
 async def fetch_github_data(github_username: str) -> dict:
-    """Fetch GitHub profile. Language bytes = accurate, not just repo counts."""
     try:
         async with httpx.AsyncClient() as client:
             profile_res = await client.get(
@@ -202,49 +181,36 @@ async def fetch_github_data(github_username: str) -> dict:
                 timeout=10.0
             )
             repos = repos_res.json() if repos_res.status_code == 200 else []
-            if not isinstance(repos, list):
-                repos = []
 
-            # Aggregate language bytes across repos (accurate signal for matching)
-            lang_bytes: dict = {}
-            for repo in repos[:5]:
-                if not isinstance(repo, dict) or not repo.get('name'):
-                    continue
-                lang_res = await client.get(
-                    f"https://api.github.com/repos/{github_username}/{repo['name']}/languages",
-                    headers={"Accept": "application/vnd.github.v3+json"},
-                    timeout=5.0
-                )
-                if lang_res.status_code == 200:
-                    for lang, byte_count in lang_res.json().items():
-                        lang_bytes[lang] = lang_bytes.get(lang, 0) + byte_count
-
-            top_languages = sorted(lang_bytes, key=lang_bytes.get, reverse=True)[:5]
+            languages = {}
+            for repo_data in (repos if isinstance(repos, list) else [])[:5]:
+                repo = repo_data if isinstance(repo_data, dict) else {}
+                lang = repo.get('language')
+                if lang:
+                    languages[lang] = languages.get(lang, 0) + 1
 
             return {
                 "github_username": github_username,
                 "avatar": profile.get("avatar_url", f"https://github.com/{github_username}.png"),
-                "bio": profile.get("bio", "") or "",
-                "github_languages": top_languages,
+                "bio": profile.get("bio", ""),
+                "github_languages": sorted(languages.keys(), key=languages.get, reverse=True)[:5],
                 "github_repos": [
                     {
-                        "name": r.get("name", ""),
+                        "name": r.get("name", "unknown"),
                         "description": r.get("description", ""),
                         "stars": r.get("stargazers_count", 0),
                         "language": r.get("language", "")
                     }
-                    for r in repos[:5] if isinstance(r, dict)
+                    for r in (repos if isinstance(repos, list) else [])[:5]
                 ],
                 "total_stars": sum(
-                    r.get("stargazers_count", 0) for r in repos if isinstance(r, dict)
+                    r.get("stargazers_count", 0) if isinstance(r, dict) else 0
+                    for r in (repos if isinstance(repos, list) else [])
                 ),
                 "public_repos": profile.get("public_repos", 0)
             }
-
-    except HTTPException:
-        raise
     except httpx.HTTPError as e:
-        print(f"[main] GitHub fetch error: {type(e).__name__}")
+        print(f"GitHub fetch error: {e}")
         return {
             "github_username": github_username,
             "avatar": f"https://github.com/{github_username}.png",
@@ -255,148 +221,104 @@ async def fetch_github_data(github_username: str) -> dict:
             "public_repos": 0
         }
 
-
 # ============================================
-# AUTH
+# AUTH ENDPOINTS
 # ============================================
 
 @app.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
-    try:
-        existing = get_builder_by_username(request.username)
-        if existing:
-            raise HTTPException(status_code=400, detail="Username already taken")
+    if get_builder_by_username(request.username):
+        raise HTTPException(status_code=400, detail="Username already taken")
 
-        github_data = await fetch_github_data(request.github_username)
-        has_activity = len(github_data['github_repos']) > 0 or github_data['public_repos'] > 2
+    github_data = await fetch_github_data(request.github_username)
+    has_activity = len(github_data['github_repos']) > 0 or github_data['public_repos'] > 2
 
-        bio = github_data['bio']
-        if not bio or len(bio) < 10:
-            bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
+    bio = github_data['bio']
+    if not bio or len(bio) < 10:
+        bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
 
-        new_builder = {
-            "username": request.username,
-            "password": _hash_password(request.password),
-            "github_username": request.github_username,
-            "avatar": github_data['avatar'],
-            "bio": bio,
-            "building_style": "weekend hacker",
-            "interests": [],
-            "open_to": [],
-            "availability": "flexible",
-            "github_languages": github_data['github_languages'],
-            "github_repos": github_data['github_repos'],
-            "total_stars": github_data['total_stars'],
-            "public_repos": github_data['public_repos'],
-            "learning": [],
-            "experience_level": "intermediate",
-            "looking_for": "build_partner",
-            "email": request.email,
-            "city": request.city or "Remote",
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
-        }
-        
-        upsert_builder(new_builder)
+    now = datetime.now().isoformat()
+    new_builder = {
+        "username": request.username,
+        "password": request.password,  # TODO: hash in production
+        **github_data,
+        "bio": bio,
+        "building_style": "figures_it_out",
+        "interests": [],
+        "open_to": ["weekend projects", "hackathons"],
+        "availability": "open",
+        "current_idea": None,
+        "email": request.email or "",
+        "city": request.city or None,
+        "learning": [],
+        "experience_level": "intermediate",
+        "looking_for": "build_partner",
+        "created_at": now,
+        "updated_at": now
+    }
 
-        # Handle city hub
-        if request.city:
-            from database import get_communities, join_community
-            all_comms = get_communities()
-            city_comm = next((c for c in all_comms if c['name'].lower() == f"{request.city.lower()} hub"), None)
-            if city_comm:
-                join_community(city_comm['id'], request.username)
+    upsert_builder(new_builder)
 
-        session_id = str(uuid.uuid4())
-        save_session(session_id, request.username)
+    session_id = str(uuid.uuid4())
+    save_session(session_id, request.username)
 
-        profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
-        
-        # Convert dates to strings for Pydantic
-        for key, val in profile.items():
-            if hasattr(val, 'isoformat'):
-                profile[key] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                profile[key] = str(val)
-        
-        return AuthResponse(
-            session_id=session_id,
-            profile=BuilderProfile(**profile),
-            needs_onboarding=not has_activity
-        )
+    if request.email:
+        send_welcome_email(request.email, request.username)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"REGISTER_ERROR: {e}")
-        raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
+    profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
+    return AuthResponse(
+        session_id=session_id,
+        profile=BuilderProfile(**profile),
+        needs_onboarding=not has_activity
+    )
+
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
-    try:
-        builder = get_builder_by_username(request.username)
-        if not builder:
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+    builder = get_builder_by_username(request.username)
+    if not builder or builder['password'] != request.password:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
-        stored = builder.get('password', "sha256:x:x")
-        if not _check_password(request.password, stored):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+    session_id = str(uuid.uuid4())
+    save_session(session_id, request.username)
 
-        # Migrate legacy plain-text password on successful login
-        if not stored.startswith("sha256:"):
-            builder['password'] = _hash_password(request.password)
-            upsert_builder(builder)
-
-        session_id = str(uuid.uuid4())
-        save_session(session_id, request.username)
-
-        # Convert to a clean dict and handle all non-JSON types
-        profile_data = dict(builder)
-        profile = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
-        
-        for key, val in profile.items():
-            if hasattr(val, 'isoformat'):
-                profile[key] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                profile[key] = str(val)
-
-        return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"LOGIN_ERROR: {e}")
-        raise HTTPException(status_code=500, detail="Login failed. Please try again.")
-
+    return AuthResponse(
+        session_id=session_id,
+        profile=_safe_profile(builder),
+        needs_onboarding=False
+    )
 
 # ============================================
-# PROFILE
+# PROFILE ENDPOINTS
 # ============================================
 
 @app.post("/profile/update")
 async def update_profile(request: UpdateProfileRequest):
     username = get_session_username(request.session_id)
     if not username:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+        raise HTTPException(status_code=401, detail="Invalid session")
 
     builder = get_builder_by_username(username)
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
 
-    for field in ['building_style', 'interests', 'open_to', 'availability',
-                  'current_idea', 'city', 'learning', 'experience_level', 'looking_for']:
-        val = getattr(request, field, None)
-        if val is not None:
-            builder[field] = val
+    updated = _row_to_dict(builder)
 
-    builder['updated_at'] = datetime.now()
-    upsert_builder(builder)
+    if request.building_style is not None:   updated['building_style'] = request.building_style
+    if request.interests is not None:        updated['interests'] = request.interests
+    if request.open_to is not None:          updated['open_to'] = request.open_to
+    if request.availability is not None:     updated['availability'] = request.availability
+    if request.current_idea is not None:     updated['current_idea'] = request.current_idea
+    if request.city is not None:             updated['city'] = request.city
+    if request.email is not None:            updated['email'] = request.email
+    if request.learning is not None:         updated['learning'] = request.learning
+    if request.experience_level is not None: updated['experience_level'] = request.experience_level
+    if request.looking_for is not None:      updated['looking_for'] = request.looking_for
 
-    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
-    for d in ['created_at', 'updated_at']:
-        if profile.get(d) and hasattr(profile[d], 'isoformat'):
-            profile[d] = profile[d].isoformat()
-            
+    updated['updated_at'] = datetime.now().isoformat()
+    upsert_builder(updated)
+
+    profile = {k: v for k, v in updated.items() if k not in ('password', 'email')}
     return {"success": True, "profile": BuilderProfile(**profile)}
 
 
@@ -405,16 +327,7 @@ async def get_profile(username: str):
     builder = get_builder_by_username(username)
     if not builder:
         raise HTTPException(status_code=404, detail="Builder not found")
-    
-    profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
-    for key, val in profile.items():
-        if hasattr(val, 'isoformat'):
-            profile[key] = val.isoformat()
-        elif isinstance(val, uuid.UUID):
-            profile[key] = str(val)
-            
-    return BuilderProfile(**profile)
-
+    return _safe_profile(builder)
 
 # ============================================
 # DISCOVERY & MATCHING
@@ -423,176 +336,177 @@ async def get_profile(username: str):
 @app.get("/discover", response_model=List[BuilderProfile])
 async def discover_builders(
     session_id: Optional[str] = None,
-    community_id: Optional[str] = None,
     limit: int = 20,
     filter_interest: Optional[str] = None,
     filter_availability: Optional[str] = None
 ):
-    if community_id:
-        from database import get_community_members
-        builders = get_community_members(community_id)
-    else:
-        builders = get_builders()
+    current_username = get_session_username(session_id) if session_id else None
+    all_builders = [_row_to_dict(b) for b in get_builders()]
 
-    current_username = None
-    if session_id:
-        current_username = get_session_username(session_id)
-        if current_username:
-            builders = [b for b in builders if b['username'] != current_username]
+    # Exclude self
+    if current_username:
+        all_builders = [b for b in all_builders if b['username'] != current_username]
 
+    # Filter by skill — searches languages, interests, learning, bio, repo languages
     if filter_interest:
-        builders = [b for b in builders if b.get('interests') and filter_interest in b.get('interests')]
+        search = filter_interest.lower().strip()
+        def builder_matches(b):
+            if any(search in lang.lower() for lang in b.get('github_languages', [])):
+                return True
+            if any(search in i.lower() for i in b.get('interests', [])):
+                return True
+            if any(search in l.lower() for l in b.get('learning', [])):
+                return True
+            if search in b.get('bio', '').lower():
+                return True
+            repo_langs = [
+                r.get('language', '').lower()
+                for r in b.get('github_repos', [])
+                if r.get('language')
+            ]
+            return any(search in lang for lang in repo_langs)
+        all_builders = [b for b in all_builders if builder_matches(b)]
+
     if filter_availability:
-        builders = [b for b in builders if b.get('availability') == filter_availability]
+        all_builders = [b for b in all_builders if b.get('availability') == filter_availability]
 
     def sort_key(b):
         priority = 2 if b.get('availability') in ['this_weekend', 'this_month'] else (1 if b.get('current_idea') else 0)
-        # Handle datetime comparison safely
-        updated_at = b.get('updated_at')
-        updated_at_str = updated_at.isoformat() if hasattr(updated_at, 'isoformat') else str(updated_at)
-        return (priority, updated_at_str)
+        return (priority, b.get('updated_at', ''))
 
-    builders.sort(key=sort_key, reverse=True)
-    
+    all_builders.sort(key=sort_key, reverse=True)
+
     profiles = []
-    for b in builders[:limit]:
-        p = {k: v for k, v in b.items() if k not in ('password', 'email')}
-        for key, val in p.items():
-            if hasattr(val, 'isoformat'):
-                p[key] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                p[key] = str(val)
-        profiles.append(BuilderProfile(**p))
-        
+    for b in all_builders[:limit]:
+        b.pop('password', None)
+        b.pop('email', None)
+        profiles.append(BuilderProfile(**b))
     return profiles
 
 
 @app.post("/match/{target_username}", response_model=MatchResponse)
-async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False, community_id: Optional[str] = None):
+async def get_match_analysis(target_username: str, session_id: str, local_only: bool = False):
     current_username = get_session_username(session_id)
     if not current_username:
         raise HTTPException(status_code=401, detail="Invalid session")
 
-    current_builder = get_builder_by_username(current_username)
-    target_builder  = get_builder_by_username(target_username)
+    current_builder = _row_to_dict(get_builder_by_username(current_username))
+    target_builder  = _row_to_dict(get_builder_by_username(target_username))
 
     if not current_builder or not target_builder:
         raise HTTPException(status_code=404, detail="Builder not found")
 
-    # Match result from brain.py
-    match_result = get_demo_match(current_username, target_username)
-    if not match_result:
-        # If community_id is provided, we could pass it to find_build_matches 
-        # for extra context (e.g. hackathon matching), but brain.py doesn't support it yet.
-        match_result = find_build_matches(current_builder, target_builder, local_only=local_only)
-    
+    demo_result  = get_demo_match(current_username, target_username)
+    match_result = demo_result if demo_result else find_build_matches(
+        current_builder, target_builder, local_only=local_only
+    )
+
     if not match_result:
         raise HTTPException(status_code=500, detail="Failed to generate match")
 
-    target_profile = {k: v for k, v in target_builder.items() if k not in ('password', 'email')}
-    for d in ['created_at', 'updated_at']:
-        if target_profile.get(d) and hasattr(target_profile[d], 'isoformat'):
-            target_profile[d] = target_profile[d].isoformat()
+    # Email the target if they have an email (skip demo matches)
+    target_email = target_builder.get("email")
+    if target_email and not demo_result:
+        send_match_notification(
+            to_email=target_email,
+            to_username=target_username,
+            from_username=current_username,
+            from_avatar=current_builder.get("avatar", ""),
+            chemistry_score=match_result['chemistry_score'],
+            vibe=match_result['vibe'],
+            why=match_result['why'],
+            build_idea=match_result['build_idea'],
+        )
 
     return MatchResponse(
-        matched_builder=BuilderProfile(**target_profile),
+        matched_builder=_safe_profile(target_builder),
         chemistry_score=match_result['chemistry_score'],
         vibe=match_result['vibe'],
         why=match_result['why'],
         build_idea=match_result['build_idea']
     )
 
+# ============================================
+# COMMUNITY ENDPOINTS
+# ============================================
+
+@app.get("/communities", response_model=List[CommunityResponse])
+async def list_communities():
+    rows = get_communities()
+    return [
+        CommunityResponse(
+            id=str(row['id']),
+            name=row['name'],
+            description=row.get('description', ''),
+            type=row.get('type', 'general'),
+            members_count=int(row.get('members_count', 0))
+        )
+        for row in rows
+    ]
+
+
+@app.get("/communities/{community_id}/members")
+async def list_community_members(community_id: str):
+    comm = get_community_by_id(community_id)
+    if not comm:
+        raise HTTPException(status_code=404, detail="Community not found")
+
+    members = get_community_members(community_id)
+    return {
+        "community_id": community_id,
+        "community_name": comm['name'],
+        "members": [_safe_profile(m) for m in members],
+        "total": len(members)
+    }
+
+
+@app.post("/communities/{community_id}/join")
+async def join_community_endpoint(community_id: str, request: JoinCommunityRequest):
+    username = get_session_username(request.session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+
+    comm = get_community_by_id(community_id)
+    if not comm:
+        raise HTTPException(status_code=404, detail="Community not found")
+
+    db_join_community(community_id, username)
+    return {"success": True, "community": comm['name'], "message": f"Joined {comm['name']}"}
 
 # ============================================
-# HEALTH
+# HEALTH CHECK
 # ============================================
 
 @app.get("/health")
 async def health_check():
     try:
-        from database import get_builders, get_communities
         builders = get_builders()
-        comms = get_communities()
         return {
             "status": "ok",
-            "version": "1.0.4",
-            "database": "connected",
+            "version": "1.0.0",
+            "db": "ok",
             "total_builders": len(builders),
-            "total_communities": len(comms),
-            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        print(f"[HEALTH] Database error: {e}")
         return {
-            "status": "error",
-            "version": "1.0.4",
-            "database": "disconnected",
-            "error": "Database connectivity issue",
-            "timestamp": datetime.now().isoformat()
+            "status": "degraded",
+            "version": "1.0.0",
+            "db": f"error: {type(e).__name__}",
+            "total_builders": 0,
         }
-
-# ============================================
-# COMMUNITY ENDPOINTS
-# ============================================
-
-@app.get("/communities", response_model=List[Community])
-async def list_communities():
-    from database import get_communities
-    comms = get_communities()
-    results = []
-    for c in comms:
-        # Convert UUIDs and datetimes to string for Pydantic
-        row = dict(c)
-        for key, val in row.items():
-            if hasattr(val, 'isoformat'):
-                row[key] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                row[key] = str(val)
-        results.append(Community(**row))
-    return results
-
-@app.post("/communities", response_model=Community)
-async def create_new_community(request: CreateCommunityRequest):
-    username = get_session_username(request.session_id)
-    if not username:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    from database import create_community, get_community_by_id
-    cid = create_community(request.name, request.description, username, request.type)
-    comm = get_community_by_id(cid)
-    if hasattr(comm['created_at'], 'isoformat'):
-        comm['created_at'] = comm['created_at'].isoformat()
-    return Community(**comm)
-
-@app.post("/communities/{community_id}/join")
-async def join_comm(community_id: str, request: JoinCommunityRequest):
-    username = get_session_username(request.session_id)
-    if not username:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    from database import join_community
-    join_community(community_id, username)
-    return {"success": True}
-
-@app.get("/communities/{community_id}/members", response_model=CommunityMemberResponse)
-async def list_members(community_id: str):
-    from database import get_community_members
-    builders = get_community_members(community_id)
-    profiles = []
-    for b in builders:
-        p = {k: v for k, v in b.items() if k not in ('password', 'email')}
-        for key, val in p.items():
-            if hasattr(val, 'isoformat'):
-                p[key] = val.isoformat()
-            elif isinstance(val, uuid.UUID):
-                p[key] = str(val)
-        profiles.append(BuilderProfile(**p))
-    return CommunityMemberResponse(community_id=community_id, members=profiles)
 
 @app.get("/")
 async def root():
-    return {"name": "Partners API", "version": "1.0.0", "docs": "/docs", "health": "/health"}
+    return {
+        "name": "Partners API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
 
+# ============================================
+# SERVER
+# ============================================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
