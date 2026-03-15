@@ -92,9 +92,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
                         {!isLogin && (
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2 ml-1 tracking-widest">Email (Optional)</label>
+                                    <label className="block text-[10px] font-mono text-slate-500 uppercase mb-2 ml-1 tracking-widest">Email</label>
                                     <input
                                         type="email"
+                                        required
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl px-4 py-4 text-white font-mono text-sm focus:ring-1 focus:ring-terminal-green outline-none"
