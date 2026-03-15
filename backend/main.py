@@ -318,38 +318,27 @@ async def register(request: RegisterRequest):
             elif isinstance(val, uuid.UUID):
                 profile[key] = str(val)
         
-        try:
-            p_obj = BuilderProfile(**profile)
-            return AuthResponse(
-                session_id=session_id,
-                profile=p_obj,
-                needs_onboarding=not has_activity
-            )
-        except Exception as ve:
-            print(f"[AUTH] Register Validation Error: {ve}")
-            raise HTTPException(status_code=500, detail=f"Profile validation failed: {str(ve)}")
+        return AuthResponse(
+            session_id=session_id,
+            profile=BuilderProfile(**profile),
+            needs_onboarding=not has_activity
+        )
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        err_msg = f"CRITICAL_REGISTER_ERROR: {str(e)}\n{traceback.format_exc()}"
-        print(err_msg)
-        raise HTTPException(status_code=500, detail=err_msg)
-
+        print(f"REGISTER_ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
     try:
-        print(f"[AUTH] Detailed Login attempt: {request.username}")
         builder = get_builder_by_username(request.username)
         if not builder:
-            print(f"[AUTH] User not found: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         stored = builder.get('password', "sha256:x:x")
         if not _check_password(request.password, stored):
-            print(f"[AUTH] Password mismatch: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Migrate legacy plain-text password on successful login
@@ -370,21 +359,13 @@ async def login(request: LoginRequest):
             elif isinstance(val, uuid.UUID):
                 profile[key] = str(val)
 
-        # Final validation before response
-        try:
-            p_obj = BuilderProfile(**profile)
-            return AuthResponse(session_id=session_id, profile=p_obj)
-        except Exception as ve:
-            print(f"[AUTH] Pydantic Validation Error: {ve}")
-            raise HTTPException(status_code=500, detail=f"Profile validation failed: {str(ve)}")
+        return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        err_msg = f"CRITICAL_LOGIN_ERROR: {str(e)}\n{traceback.format_exc()}"
-        print(err_msg)
-        raise HTTPException(status_code=500, detail=err_msg)
+        print(f"LOGIN_ERROR: {e}")
+        raise HTTPException(status_code=500, detail="Login failed. Please try again.")
 
 
 # ============================================
@@ -533,7 +514,7 @@ async def health_check():
         comms = get_communities()
         return {
             "status": "ok",
-            "version": "1.0.3",
+            "version": "1.0.4",
             "database": "connected",
             "total_builders": len(builders),
             "total_communities": len(comms),
@@ -543,78 +524,11 @@ async def health_check():
         print(f"[HEALTH] Database error: {e}")
         return {
             "status": "error",
-            "version": "1.0.3",
+            "version": "1.0.4",
             "database": "disconnected",
-            "error": str(e),
+            "error": "Database connectivity issue",
             "timestamp": datetime.now().isoformat()
         }
-
-@app.get("/debug")
-async def debug_system():
-    results = {
-        "timestamp": datetime.now().isoformat(),
-        "env": {
-            "DATABASE_URL_SET": "DATABASE_URL" in os.environ,
-            "GOOGLE_API_KEY_SET": "GOOGLE_API_KEY" in os.environ,
-        },
-        "database": {"status": "untested"},
-        "models": {"status": "untested"}
-    }
-    
-    # 1. Test Database
-    try:
-        from database import get_db_conn, get_builders, DB_URL
-        
-        # Mask DB_URL for safe debugging
-        masked_url = DB_URL
-        if "@" in masked_url:
-            prefix, rest = masked_url.split("@", 1)
-            if "://" in prefix:
-                proto, credentials = prefix.split("://", 1)
-                if ":" in credentials:
-                    user, _ = credentials.split(":", 1)
-                    masked_url = f"{proto}://{user}:****@{rest}"
-        results["database"]["masked_url"] = masked_url
-
-        conn = get_db_conn()
-        results["database"]["connection"] = "success"
-        
-        with conn.cursor() as cur:
-            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
-            results["database"]["tables"] = [r['table_name'] for r in cur.fetchall()]
-        
-        builders = get_builders()
-        results["database"]["builder_count"] = len(builders)
-        results["database"]["status"] = "ok"
-        conn.close()
-    except Exception as e:
-        results["database"]["status"] = "error"
-        results["database"]["error"] = str(e)
-        import traceback
-        results["database"]["traceback"] = traceback.format_exc()
-
-    # 2. Test Pydantic
-    try:
-        if results["database"]["status"] == "ok" and results["database"]["builder_count"] > 0:
-            from database import get_builders
-            b = get_builders()[0]
-            profile_data = dict(b)
-            p = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
-            for key, val in p.items():
-                if hasattr(val, 'isoformat'): p[key] = val.isoformat()
-                elif isinstance(val, uuid.UUID): p[key] = str(val)
-            
-            p_obj = BuilderProfile(**p)
-            results["models"]["builder_validation"] = "success"
-            results["models"]["sample_user"] = p_obj.username
-            results["models"]["status"] = "ok"
-    except Exception as e:
-        results["models"]["status"] = "error"
-        results["models"]["error"] = str(e)
-        import traceback
-        results["models"]["traceback"] = traceback.format_exc()
-
-    return results
 
 # ============================================
 # COMMUNITY ENDPOINTS
