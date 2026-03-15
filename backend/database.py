@@ -1,9 +1,12 @@
 import os
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, register_default_jsonb
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Ensure JSONB is handled correctly
+register_default_jsonb()
 
 # We'll use the connection string for maximum reliability and to bypass RLS issues
 DB_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:0bgV4fHU1vmvCVjc@db.pgmznvpdzbfgluaicrog.supabase.co:5432/postgres")

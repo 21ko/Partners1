@@ -358,9 +358,11 @@ async def get_profile(username: str):
         raise HTTPException(status_code=404, detail="Builder not found")
     
     profile = {k: v for k, v in builder.items() if k not in ('password', 'email')}
-    for d in ['created_at', 'updated_at']:
-        if profile.get(d) and hasattr(profile[d], 'isoformat'):
-            profile[d] = profile[d].isoformat()
+    for key, val in profile.items():
+        if hasattr(val, 'isoformat'):
+            profile[key] = val.isoformat()
+        elif isinstance(val, uuid.UUID):
+            profile[key] = str(val)
             
     return BuilderProfile(**profile)
 
@@ -406,9 +408,11 @@ async def discover_builders(
     profiles = []
     for b in builders[:limit]:
         p = {k: v for k, v in b.items() if k not in ('password', 'email')}
-        for d in ['created_at', 'updated_at']:
-            if p.get(d) and hasattr(p[d], 'isoformat'):
-                p[d] = p[d].isoformat()
+        for key, val in p.items():
+            if hasattr(val, 'isoformat'):
+                p[key] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                p[key] = str(val)
         profiles.append(BuilderProfile(**p))
         
     return profiles
@@ -486,10 +490,17 @@ async def health_check():
 async def list_communities():
     from database import get_communities
     comms = get_communities()
+    results = []
     for c in comms:
-        if hasattr(c['created_at'], 'isoformat'):
-            c['created_at'] = c['created_at'].isoformat()
-    return [Community(**c) for c in comms]
+        # Convert UUIDs and datetimes to string for Pydantic
+        row = dict(c)
+        for key, val in row.items():
+            if hasattr(val, 'isoformat'):
+                row[key] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                row[key] = str(val)
+        results.append(Community(**row))
+    return results
 
 @app.post("/communities", response_model=Community)
 async def create_new_community(request: CreateCommunityRequest):
@@ -521,9 +532,11 @@ async def list_members(community_id: str):
     profiles = []
     for b in builders:
         p = {k: v for k, v in b.items() if k not in ('password', 'email')}
-        for d in ['created_at', 'updated_at']:
-            if p.get(d) and hasattr(p[d], 'isoformat'):
-                p[d] = p[d].isoformat()
+        for key, val in p.items():
+            if hasattr(val, 'isoformat'):
+                p[key] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                p[key] = str(val)
         profiles.append(BuilderProfile(**p))
     return CommunityMemberResponse(community_id=community_id, members=profiles)
 
