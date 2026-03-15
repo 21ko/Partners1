@@ -9,7 +9,12 @@ load_dotenv()
 register_default_jsonb()
 
 # We'll use the connection string for maximum reliability and to bypass RLS issues
-_RAW_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:0bgV4fHU1vmvCVjc@db.pgmznvpdzbfgluaicrog.supabase.co:5432/postgres")
+_RAW_URL = os.environ.get("DATABASE_URL")
+
+if not _RAW_URL:
+    # This should only happen in local dev if .env is missing
+    print("[database] WARNING: DATABASE_URL not found in environment!")
+    _RAW_URL = "postgresql://postgres:0bgV4fHU1vmvCVjc@db.pgmznvpdzbfgluaicrog.supabase.co:5432/postgres"
 
 # Normalize: psycopg2 prefers 'postgresql://' over 'postgres://'
 if _RAW_URL.startswith("postgres://"):
