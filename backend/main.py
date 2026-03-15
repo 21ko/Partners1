@@ -25,11 +25,18 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-# Permissive CORS for debugging
+# Robust CORS for debugging and production
+ALLOWED_ORIGINS = [
+    "*",
+    "https://partners1.vercel.app",
+    "https://partners1-21ko.vercel.app",
+    "https://partners1-nvvr49ueb-21kos-projects.vercel.app"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False, # Must be False if using "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -52,13 +59,13 @@ SESSION_TTL_DAYS = 30
 
 class BuilderProfile(BaseModel):
     username: str
-    github_username: str
-    avatar: str
-    bio: str
-    building_style: str
-    interests: List[str]
-    open_to: List[str]
-    availability: str
+    github_username: str = ""
+    avatar: str = ""
+    bio: str = ""
+    building_style: str = "figures_it_out"
+    interests: List[str] = []
+    open_to: List[str] = []
+    availability: str = "open"
     current_idea: Optional[str] = None
     city: Optional[str] = None
     github_languages: List[str] = []
@@ -68,8 +75,8 @@ class BuilderProfile(BaseModel):
     learning: List[str] = []
     experience_level: str = "intermediate"
     looking_for: str = "build_partner"
-    created_at: str
-    updated_at: str
+    created_at: str = ""
+    updated_at: str = ""
 
 class RegisterRequest(BaseModel):
     username: str
