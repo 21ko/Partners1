@@ -9,13 +9,20 @@ load_dotenv()
 register_default_jsonb()
 
 # We'll use the connection string for maximum reliability and to bypass RLS issues
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:0bgV4fHU1vmvCVjc@db.pgmznvpdzbfgluaicrog.supabase.co:5432/postgres")
+_RAW_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:0bgV4fHU1vmvCVjc@db.pgmznvpdzbfgluaicrog.supabase.co:5432/postgres")
+
+# Normalize: psycopg2 prefers 'postgresql://' over 'postgres://'
+if _RAW_URL.startswith("postgres://"):
+    DB_URL = _RAW_URL.replace("postgres://", "postgresql://", 1)
+else:
+    DB_URL = _RAW_URL
 
 def get_db_conn():
     # Supabase/Postgres usually requires SSL
     conn_url = DB_URL
     if "sslmode" not in conn_url:
-        conn_url += ("&" if "?" in conn_url else "?") + "sslmode=require"
+        separator = "&" if "?" in conn_url else "?"
+        conn_url += f"{separator}sslmode=require"
     
     return psycopg2.connect(conn_url, cursor_factory=RealDictCursor)
 

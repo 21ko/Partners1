@@ -528,12 +528,12 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
 @app.get("/health")
 async def health_check():
     try:
+        from database import get_builders, get_communities
         builders = get_builders()
-        from database import get_communities
         comms = get_communities()
         return {
             "status": "ok",
-            "version": "1.0.2",
+            "version": "1.0.3",
             "database": "connected",
             "total_builders": len(builders),
             "total_communities": len(comms),
@@ -543,11 +543,66 @@ async def health_check():
         print(f"[HEALTH] Database error: {e}")
         return {
             "status": "error",
-            "version": "1.0.2",
+            "version": "1.0.3",
             "database": "disconnected",
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+@app.get("/debug")
+async def debug_system():
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "env": {
+            "DATABASE_URL_SET": "DATABASE_URL" in os.environ,
+            "GOOGLE_API_KEY_SET": "GOOGLE_API_KEY" in os.environ,
+        },
+        "database": {"status": "untested"},
+        "models": {"status": "untested"}
+    }
+    
+    # 1. Test Database
+    try:
+        from database import get_db_conn, get_builders
+        conn = get_db_conn()
+        results["database"]["connection"] = "success"
+        
+        with conn.cursor() as cur:
+            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+            results["database"]["tables"] = [r['table_name'] for r in cur.fetchall()]
+        
+        builders = get_builders()
+        results["database"]["builder_count"] = len(builders)
+        results["database"]["status"] = "ok"
+        conn.close()
+    except Exception as e:
+        results["database"]["status"] = "error"
+        results["database"]["error"] = str(e)
+        import traceback
+        results["database"]["traceback"] = traceback.format_exc()
+
+    # 2. Test Pydantic
+    try:
+        if results["database"]["status"] == "ok" and results["database"]["builder_count"] > 0:
+            from database import get_builders
+            b = get_builders()[0]
+            profile_data = dict(b)
+            p = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
+            for key, val in p.items():
+                if hasattr(val, 'isoformat'): p[key] = val.isoformat()
+                elif isinstance(val, uuid.UUID): p[key] = str(val)
+            
+            p_obj = BuilderProfile(**p)
+            results["models"]["builder_validation"] = "success"
+            results["models"]["sample_user"] = p_obj.username
+            results["models"]["status"] = "ok"
+    except Exception as e:
+        results["models"]["status"] = "error"
+        results["models"]["error"] = str(e)
+        import traceback
+        results["models"]["traceback"] = traceback.format_exc()
+
+    return results
 
 # ============================================
 # COMMUNITY ENDPOINTS
