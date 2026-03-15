@@ -43,3 +43,13 @@ export interface Session {
 }
 
 export interface AuthResponse extends Session { }
+
+export interface Community {
+  id: string;
+  name: string;
+  description: string;
+  creator: string;
+  type: 'city' | 'interest' | 'hackathon';
+  created_at: string;
+  members_count?: number;
+}

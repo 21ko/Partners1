@@ -107,5 +107,30 @@ export const authService = {
 
     isAuthenticated(): boolean {
         return !!this.getSession();
+    },
+
+    async getCommunities(): Promise<any[]> {
+        const res = await fetch(`${API_URL}/communities`);
+        if (!res.ok) await safeJson(res);
+        return await safeJson(res);
+    },
+
+    async getCommunityMembers(communityId: string): Promise<any> {
+        const res = await fetch(`${API_URL}/communities/${communityId}/members`);
+        if (!res.ok) await safeJson(res);
+        return await safeJson(res);
+    },
+
+    async joinCommunity(communityId: string): Promise<any> {
+        const session = this.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const res = await fetch(`${API_URL}/communities/${communityId}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: session.session_id })
+        });
+        if (!res.ok) await safeJson(res);
+        return await safeJson(res);
     }
 };

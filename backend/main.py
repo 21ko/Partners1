@@ -131,6 +131,7 @@ class Community(BaseModel):
     type: str
     host_username: Optional[str] = None
     created_at: str
+    members_count: int = 0
 
 
 class CreateCommunityRequest(BaseModel):

@@ -126,13 +126,21 @@ def create_community(name: str, description: str, host_username: str = None, typ
 def get_communities():
     with db_session() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM communities ORDER BY created_at DESC")
+            cur.execute("""
+                SELECT c.*, (SELECT count(*) FROM community_members cm WHERE cm.community_id = c.id) as members_count
+                FROM communities c
+                ORDER BY c.created_at DESC
+            """)
             return cur.fetchall()
 
 def get_community_by_id(community_id: str):
     with db_session() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM communities WHERE id = %s", (community_id,))
+            cur.execute("""
+                SELECT c.*, (SELECT count(*) FROM community_members cm WHERE cm.community_id = c.id) as members_count
+                FROM communities c
+                WHERE c.id = %s
+            """, (community_id,))
             return cur.fetchone()
 
 def join_community(community_id: str, username: str):

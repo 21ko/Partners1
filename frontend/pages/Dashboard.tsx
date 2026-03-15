@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { authService } from '../services/authService';
+import { Community, Builder } from '../types';
 
 const QUOTES = [
   "Build for the problem you have today, not the scale you might have in two years.",
@@ -18,11 +19,43 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
   const user = authService.getSession()?.profile;
   const [quoteIdx, setQuoteIdx] = useState(0);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [loadingComms, setLoadingComms] = useState(true);
+  const [selectedComm, setSelectedComm] = useState<Community | null>(null);
+  const [commMembers, setCommMembers] = useState<Builder[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     // Randomize initial quote
     setQuoteIdx(Math.floor(Math.random() * QUOTES.length));
+    
+    // Fetch real communities
+    const fetchComms = async () => {
+      try {
+        const data = await authService.getCommunities();
+        setCommunities(data);
+      } catch (e) {
+        console.error("Failed to fetch communities", e);
+      } finally {
+        setLoadingComms(false);
+      }
+    };
+    fetchComms();
   }, []);
+
+  const handleCommunityClick = async (comm: Community) => {
+    setSelectedComm(comm);
+    setLoadingMembers(true);
+    setCommMembers([]);
+    try {
+      const data = await authService.getCommunityMembers(comm.id);
+      setCommMembers(data.members || []);
+    } catch (e) {
+      console.error("Failed to fetch members", e);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
   const nextQuote = () => {
     setQuoteIdx((prev) => (prev + 1) % QUOTES.length);
@@ -90,29 +123,129 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         <div className="lg:col-span-8 space-y-8">
           <section className="space-y-6">
             <h3 className="text-xl font-bold text-white flex items-center gap-3">
-              <span className="text-terminal-blue">&gt;</span> ACTIVE_HACKATHONS
+              <span className="text-terminal-blue">&gt;</span> ACTIVE_COMMUNITIES
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                { title: 'DeFi_Summer_Sprint', prize: '$10k', tag: 'SOLANA' },
-                { title: 'Gemini_Intelligence_Jam', prize: '$50k', tag: 'AI/LLM' },
-              ].map((h, i) => (
-                <div key={i} className="group p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-terminal-blue transition-all cursor-pointer">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-[10px] font-mono font-bold px-2 py-1 bg-terminal-blue/10 text-terminal-blue rounded border border-terminal-blue/20">
-                      {h.tag}
-                    </span>
-                    <span className="text-xs text-terminal-green font-mono">{h.prize} pool</span>
-                  </div>
-                  <h4 className="font-bold text-white mb-2">{h.title}</h4>
-                  <p className="text-xs text-slate-500 mb-6">Sept 12-14 • Hybrid Event</p>
-                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-terminal-blue group-hover:w-full transition-all duration-1000 w-1/3" />
-                  </div>
+              {loadingComms ? (
+                [...Array(2)].map((_, i) => (
+                  <div key={i} className="h-40 bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
+                ))
+              ) : communities.length === 0 ? (
+                <div className="col-span-2 p-12 text-center border border-slate-800 border-dashed rounded-2xl">
+                  <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">No_Active_Sectors_Found</p>
                 </div>
-              ))}
+              ) : (
+                communities.map((h, i) => (
+                  <motion.div 
+                    key={h.id} 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => handleCommunityClick(h)}
+                    className="group p-6 bg-slate-900/50 border border-slate-800 rounded-2xl hover:border-terminal-blue transition-all cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="text-[10px] font-mono font-bold px-2 py-1 bg-terminal-blue/10 text-terminal-blue rounded border border-terminal-blue/20">
+                          {h.type.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-terminal-green font-mono">{h.members_count || 0} active</span>
+                      </div>
+                      <h4 className="font-bold text-white mb-2">{h.name.replace(/ /g, '_')}</h4>
+                      <p className="text-[10px] text-slate-500 mb-6 font-mono leading-tight h-8 line-clamp-2 uppercase">
+                        {h.description}
+                      </p>
+                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-terminal-blue transition-all duration-1000" 
+                          style={{ width: `${Math.min(100, ((h.members_count || 0) / 10) * 100)}%` }} 
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </div>
           </section>
+
+          {/* Community Overlay */}
+          <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 ${selectedComm ? 'visible pointer-events-auto' : 'invisible pointer-events-none'}`}>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: selectedComm ? 1 : 0 }}
+              onClick={() => setSelectedComm(null)}
+              className="absolute inset-0 bg-[#060A14]/90 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: selectedComm ? 1 : 0, scale: selectedComm ? 1 : 0.9, y: selectedComm ? 0 : 20 }}
+              className="w-full max-w-2xl bg-[#0A0F1C] border border-slate-800 rounded-3xl overflow-hidden relative z-10 shadow-2xl"
+            >
+              {selectedComm && (
+                <div className="flex flex-col h-[600px]">
+                  <div className="p-8 border-b border-slate-800 bg-slate-900/30">
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <span className="text-[10px] font-mono font-black text-terminal-blue bg-terminal-blue/10 px-2 py-1 rounded border border-terminal-blue/20 mb-3 inline-block">
+                          SECTOR_{selectedComm.type.toUpperCase()}
+                        </span>
+                        <h3 className="text-2xl font-black text-white">{selectedComm.name}</h3>
+                      </div>
+                      <button onClick={() => setSelectedComm(null)} className="text-slate-500 hover:text-white transition-colors">
+                        <span className="font-mono text-xs">[CLOSE_X]</span>
+                      </button>
+                    </div>
+                    <p className="text-slate-400 text-sm italic">"{selectedComm.description}"</p>
+                  </div>
+                  
+                  <div className="flex-grow overflow-y-auto p-8 space-y-6 scrollbar-hide">
+                    <h4 className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest">Detected_Builders_In_Hub</h4>
+                    
+                    {loadingMembers ? (
+                      <div className="space-y-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="h-16 bg-slate-900/50 border border-slate-800 rounded-xl animate-pulse" />
+                        ))}
+                      </div>
+                    ) : commMembers.length === 0 ? (
+                      <div className="py-20 text-center">
+                        <p className="text-slate-600 font-mono text-xs">NO_COGNITIVE_SIGNATURES_FOUND</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3">
+                        {commMembers.map((member) => (
+                          <div key={member.username} className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl flex items-center justify-between group hover:border-terminal-green transition-all">
+                            <div className="flex items-center gap-4">
+                              <img src={member.avatar} className="w-10 h-10 rounded-lg border border-slate-800" alt="" />
+                              <div>
+                                <div className="text-white font-bold text-sm">@{member.username}</div>
+                                <div className="text-[10px] font-mono text-slate-500 truncate max-w-[200px]">{member.bio || 'STAYING_LOW_PROFILE'}</div>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => setActiveTab('explore')}
+                              className="text-[10px] font-mono text-terminal-green border border-terminal-green/20 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-terminal-green/10"
+                            >
+                              VIEW_DATA
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-6 bg-slate-900/20 border-t border-slate-800 flex justify-center">
+                    <button 
+                      onClick={() => setSelectedComm(null)}
+                      className="text-[10px] font-mono text-slate-500 hover:text-terminal-blue transition-colors uppercase"
+                    >
+                      Return_To_Command_Center
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
 
           <section className="space-y-6">
             <h3 className="text-xl font-bold text-white flex items-center gap-3">
