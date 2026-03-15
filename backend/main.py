@@ -11,7 +11,7 @@ import httpx
 
 from brain import analyze_github_profile, find_build_matches, get_demo_match
 from emails import send_match_notification, send_welcome_email
-from db import (
+from database import (
     get_builders,
     get_builder_by_username,
     upsert_builder,
