@@ -2,7 +2,6 @@ import { Builder, AuthResponse, Session } from '../types';
 
 export const getApiUrl = () => {
     try {
-        // Safely check for Vite's injection
         const meta = import.meta as any;
         if (meta && meta.env && meta.env.VITE_API_URL) {
             return meta.env.VITE_API_URL.replace(/\/$/, '');
@@ -10,8 +9,6 @@ export const getApiUrl = () => {
     } catch (e) {
         console.error('API_URL_RESOLUTION_FAILED:', e);
     }
-    
-    // Fallback to local dev
     return 'http://localhost:8000';
 };
 
@@ -23,7 +20,6 @@ export const safeJson = async (res: Response) => {
         return await res.json();
     }
     const text = await res.text();
-    // If it's a 404 HTML page, provide a cleaner error
     if (text.includes('<!DOCTYPE html>') || text.includes('The page could not be found')) {
         throw new Error(`API Endpoint not found (404). Check if backend is running at ${API_URL}`);
     }
@@ -37,11 +33,7 @@ export const authService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password, github_username, email, city })
         });
-
-        if (!res.ok) {
-            await safeJson(res);
-        }
-
+        if (!res.ok) throw new Error(await res.text());
         const data = await safeJson(res);
         this.saveSession(data);
         return data;
@@ -53,11 +45,7 @@ export const authService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-
-        if (!res.ok) {
-            await safeJson(res);
-        }
-
+        if (!res.ok) throw new Error(await res.text());
         const data = await safeJson(res);
         this.saveSession(data);
         return data;
@@ -72,18 +60,13 @@ export const authService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: session.session_id, ...updates })
         });
-
-        if (!res.ok) {
-            await safeJson(res);
-        }
-
+        if (!res.ok) throw new Error(await res.text());
         const data = await safeJson(res);
 
-        // Update session in localStorage
+        // Update local session
         session.profile = data.profile;
-        session.needs_onboarding = false; // Profile update complete, onboarding no longer needed
+        session.needs_onboarding = false;
         this.saveSession(session);
-
         return data;
     },
 
@@ -111,13 +94,13 @@ export const authService = {
 
     async getCommunities(): Promise<any[]> {
         const res = await fetch(`${API_URL}/communities`);
-        if (!res.ok) await safeJson(res);
+        if (!res.ok) throw new Error(await res.text());
         return await safeJson(res);
     },
 
     async getCommunityMembers(communityId: string): Promise<any> {
         const res = await fetch(`${API_URL}/communities/${communityId}/members`);
-        if (!res.ok) await safeJson(res);
+        if (!res.ok) throw new Error(await res.text());
         return await safeJson(res);
     },
 
@@ -130,7 +113,7 @@ export const authService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ session_id: session.session_id })
         });
-        if (!res.ok) await safeJson(res);
+        if (!res.ok) throw new Error(await res.text());
         return await safeJson(res);
     }
 };
