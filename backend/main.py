@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
@@ -24,14 +25,10 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-ALLOWED_ORIGINS = os.environ.get(
-    "ALLOWED_ORIGINS",
-    "https://partners1.vercel.app,https://partners1-21ko.vercel.app,http://localhost:5173"
-).split(",")
-
+# Permissive CORS for debugging
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,8 +43,6 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"status": "error", "detail": "Internal Server Error", "msg": str(exc)},
     )
-
-from fastapi.responses import JSONResponse
 
 SESSION_TTL_DAYS = 30
 
