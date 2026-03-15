@@ -456,12 +456,27 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
 
 @app.get("/health")
 async def health_check():
-    builders = get_builders()
-    return {
-        "status": "ok",
-        "version": "1.0.1",
-        "total_builders": len(builders),
-    }
+    try:
+        builders = get_builders()
+        from database import get_communities
+        comms = get_communities()
+        return {
+            "status": "ok",
+            "version": "1.0.2",
+            "database": "connected",
+            "total_builders": len(builders),
+            "total_communities": len(comms),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"[HEALTH] Database error: {e}")
+        return {
+            "status": "error",
+            "version": "1.0.2",
+            "database": "disconnected",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 # ============================================
 # COMMUNITY ENDPOINTS
