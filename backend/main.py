@@ -261,91 +261,130 @@ async def fetch_github_data(github_username: str) -> dict:
 
 @app.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
-    existing = get_builder_by_username(request.username)
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already taken")
+    try:
+        existing = get_builder_by_username(request.username)
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
 
-    github_data = await fetch_github_data(request.github_username)
-    has_activity = len(github_data['github_repos']) > 0 or github_data['public_repos'] > 2
+        github_data = await fetch_github_data(request.github_username)
+        has_activity = len(github_data['github_repos']) > 0 or github_data['public_repos'] > 2
 
-    bio = github_data['bio']
-    if not bio or len(bio) < 10:
-        bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
+        bio = github_data['bio']
+        if not bio or len(bio) < 10:
+            bio = analyze_github_profile(github_data) if has_activity else "Builder looking to make things"
 
-    now = datetime.now()
-    new_builder = {
-        "username": request.username,
-        "password": _hash_password(request.password),
-        **github_data,
-        "bio": bio,
-        "building_style": "figures_it_out",
-        "interests": [],
-        "open_to": ["weekend projects", "hackathons"],
-        "availability": "open",
-        "current_idea": None,
-        "email": request.email or "",
-        "city": request.city or None,
-        "learning": [],
-        "experience_level": "intermediate",
-        "looking_for": "build_partner",
-        "created_at": now,
-        "updated_at": now
-    }
+        new_builder = {
+            "username": request.username,
+            "password": _hash_password(request.password),
+            "github_username": request.github_username,
+            "avatar": github_data['avatar'],
+            "bio": bio,
+            "building_style": "weekend hacker",
+            "interests": [],
+            "open_to": [],
+            "availability": "flexible",
+            "github_languages": github_data['github_languages'],
+            "github_repos": github_data['github_repos'],
+            "total_stars": github_data['total_stars'],
+            "public_repos": github_data['public_repos'],
+            "learning": [],
+            "experience_level": "intermediate",
+            "looking_for": "build_partner",
+            "email": request.email,
+            "city": request.city or "Remote",
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
+        }
+        
+        upsert_builder(new_builder)
 
-    upsert_builder(new_builder)
-    
-    # Auto-join city community if it exists
-    if request.city:
-        all_comms = get_communities()
-        city_comm = next((c for c in all_comms if c['type'] == 'city' and request.city.lower() in c['name'].lower()), None)
-        if city_comm:
-            from database import join_community
-            join_community(city_comm['id'], request.username)
+        # Handle city hub
+        if request.city:
+            from database import get_communities, join_community
+            all_comms = get_communities()
+            city_comm = next((c for c in all_comms if c['name'].lower() == f"{request.city.lower()} hub"), None)
+            if city_comm:
+                join_community(city_comm['id'], request.username)
 
-    session_id = str(uuid.uuid4())
-    save_session(session_id, request.username)
+        session_id = str(uuid.uuid4())
+        save_session(session_id, request.username)
 
-    profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
-    # Convert dates to strings for Pydantic
-    profile['created_at'] = profile['created_at'].isoformat()
-    profile['updated_at'] = profile['updated_at'].isoformat()
-    return AuthResponse(
-        session_id=session_id,
-        profile=BuilderProfile(**profile),
-        needs_onboarding=not has_activity
-    )
+        profile = {k: v for k, v in new_builder.items() if k not in ('password', 'email')}
+        
+        # Convert dates to strings for Pydantic
+        for key, val in profile.items():
+            if hasattr(val, 'isoformat'):
+                profile[key] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                profile[key] = str(val)
+        
+        try:
+            p_obj = BuilderProfile(**profile)
+            return AuthResponse(
+                session_id=session_id,
+                profile=p_obj,
+                needs_onboarding=not has_activity
+            )
+        except Exception as ve:
+            print(f"[AUTH] Register Validation Error: {ve}")
+            raise HTTPException(status_code=500, detail=f"Profile validation failed: {str(ve)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        err_msg = f"CRITICAL_REGISTER_ERROR: {str(e)}\n{traceback.format_exc()}"
+        print(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
-    print(f"[AUTH] Login attempt: {request.username}")
-    builder = get_builder_by_username(request.username)
-    if not builder:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+    try:
+        print(f"[AUTH] Detailed Login attempt: {request.username}")
+        builder = get_builder_by_username(request.username)
+        if not builder:
+            print(f"[AUTH] User not found: {request.username}")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    stored = builder.get('password', "sha256:x:x")
-    if not _check_password(request.password, stored):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        stored = builder.get('password', "sha256:x:x")
+        if not _check_password(request.password, stored):
+            print(f"[AUTH] Password mismatch: {request.username}")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    # Migrate legacy plain-text password on successful login
-    if not stored.startswith("sha256:"):
-        builder['password'] = _hash_password(request.password)
-        upsert_builder(builder)
+        # Migrate legacy plain-text password on successful login
+        if not stored.startswith("sha256:"):
+            builder['password'] = _hash_password(request.password)
+            upsert_builder(builder)
 
-    session_id = str(uuid.uuid4())
-    save_session(session_id, request.username)
+        session_id = str(uuid.uuid4())
+        save_session(session_id, request.username)
 
-    # Convert to a clean dict and handle all non-JSON types
-    profile_data = dict(builder)
-    profile = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
-    
-    for key, val in profile.items():
-        if hasattr(val, 'isoformat'):
-            profile[key] = val.isoformat()
-        elif isinstance(val, uuid.UUID):
-            profile[key] = str(val)
+        # Convert to a clean dict and handle all non-JSON types
+        profile_data = dict(builder)
+        profile = {k: v for k, v in profile_data.items() if k not in ('password', 'email')}
+        
+        for key, val in profile.items():
+            if hasattr(val, 'isoformat'):
+                profile[key] = val.isoformat()
+            elif isinstance(val, uuid.UUID):
+                profile[key] = str(val)
 
-    return AuthResponse(session_id=session_id, profile=BuilderProfile(**profile))
+        # Final validation before response
+        try:
+            p_obj = BuilderProfile(**profile)
+            return AuthResponse(session_id=session_id, profile=p_obj)
+        except Exception as ve:
+            print(f"[AUTH] Pydantic Validation Error: {ve}")
+            raise HTTPException(status_code=500, detail=f"Profile validation failed: {str(ve)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        err_msg = f"CRITICAL_LOGIN_ERROR: {str(e)}\n{traceback.format_exc()}"
+        print(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 
 # ============================================
