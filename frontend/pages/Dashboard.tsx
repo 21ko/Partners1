@@ -14,10 +14,10 @@ const QUOTES = [
 
 interface DashboardProps {
   setActiveTab: (tab: string) => void;
+  user?: Builder;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
-  const user = authService.getSession()?.profile;
+const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loadingComms, setLoadingComms] = useState(true);

@@ -31,7 +31,8 @@
       "updated_at": "2026-02-23T23:52:43.066631+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "sara_designs",
@@ -64,7 +65,8 @@
       "updated_at": "2026-02-23T23:52:43.066631+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "ml_marco",
@@ -97,7 +99,8 @@
       "updated_at": "2026-02-23T23:52:43.066631+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "backend_bea",
@@ -130,7 +133,8 @@
       "updated_at": "2026-02-23T23:52:43.066631+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "mobile_max",
@@ -164,7 +168,8 @@
       "updated_at": "2026-02-23T23:52:43.066631+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "yahya",
@@ -188,7 +193,8 @@
       "updated_at": "2026-02-23T23:53:15.899584+00:00",
       "learning": [],
       "experience_level": "intermediate",
-      "looking_for": "build_partner"
+      "looking_for": "build_partner",
+      "email": ""
     },
     {
       "username": "yahy",
@@ -248,7 +254,8 @@
       "experience_level": "intermediate",
       "looking_for": "build_partner",
       "created_at": "2026-02-25T02:16:57.475054",
-      "updated_at": "2026-02-25T02:16:57.475054"
+      "updated_at": "2026-02-25T02:16:57.475054",
+      "email": ""
     },
     {
       "username": "octouser",
@@ -307,14 +314,77 @@
       "experience_level": "intermediate",
       "looking_for": "build_partner",
       "created_at": "2026-02-26T02:55:47.576101",
-      "updated_at": "2026-02-26T02:55:47.576101"
+      "updated_at": "2026-02-26T02:55:47.576101",
+      "email": ""
+    },
+    {
+      "username": "tester_v1",
+      "password": "sha256:469c6d5ad4817d4c17da0708388908b3:f9a10074439b835287d616448140ba84cda556d450a6f3ed8325283645bee304",
+      "github_username": "gaearon",
+      "avatar": "https://avatars.githubusercontent.com/u/810438?v=4",
+      "bio": "Turns Figma files into working products, fast (30669 stars and counting)",
+      "github_languages": [
+        "TypeScript",
+        "JavaScript",
+        "CSS",
+        "HTML",
+        "Shell"
+      ],
+      "github_repos": [
+        {
+          "name": "rscexplorer",
+          "description": "A tool for people curious about the React Server Components protocol",
+          "stars": 1079,
+          "language": "TypeScript"
+        },
+        {
+          "name": "overreacted.io",
+          "description": "Personal blog by Dan Abramov.",
+          "stars": 7266,
+          "language": "TypeScript"
+        },
+        {
+          "name": "awesome-made-by-russians",
+          "description": "\ud83c\uddf7\ud83c\uddfa The best open source projects that were made and mainly contributed by Russian developers",
+          "stars": 95,
+          "language": null
+        },
+        {
+          "name": "react-hot-loader",
+          "description": "Tweak React components in real time. (Deprecated: use Fast Refresh instead.)",
+          "stars": 12212,
+          "language": "JavaScript"
+        },
+        {
+          "name": "hono",
+          "description": "Web framework built on Web Standards",
+          "stars": 2,
+          "language": null
+        }
+      ],
+      "total_stars": 30669,
+      "public_repos": 296,
+      "building_style": "figures_it_out",
+      "interests": [],
+      "open_to": [
+        "weekend projects",
+        "hackathons"
+      ],
+      "availability": "open",
+      "current_idea": null,
+      "email": "tester_v1@example.com",
+      "city": "Remote",
+      "learning": [],
+      "experience_level": "intermediate",
+      "looking_for": "build_partner",
+      "created_at": "2026-03-16T02:44:43.428404",
+      "updated_at": "2026-03-16T02:44:43.428404"
     }
   ],
   "sessions": {
-    "acc98b2b-8470-4b26-90fb-5dcd6a973b4a": "yahya",
-    "34ad9c8b-fe98-48f7-8c26-9d59d1833ce8": "yahy",
-    "ce10c39f-4df8-472b-b0ab-d6d457e827d6": "octouser",
-    "0a999c25-bd5c-4996-8452-8b0a31cde33e": "octouser",
-    "4df8c298-b1ea-41ea-b41f-7074966fc375": "octouser"
+    "801168ce-b891-443d-bae7-3b8e13d4cb15": {
+      "username": "tester_v1",
+      "created_at": "2026-03-16T02:44:43.434198"
+    }
   }
 }

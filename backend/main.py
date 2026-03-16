@@ -21,6 +21,8 @@ from database import (
     get_community_by_id,
     get_community_members,
     join_community as db_join_community,
+    hash_password,
+    verify_password,
 )
 
 app = FastAPI(
@@ -240,7 +242,7 @@ async def register(request: RegisterRequest):
     now = datetime.now().isoformat()
     new_builder = {
         "username": request.username,
-        "password": request.password,  # TODO: hash in production
+        "password": hash_password(request.password),
         **github_data,
         "bio": bio,
         "building_style": "figures_it_out",
@@ -276,7 +278,7 @@ async def register(request: RegisterRequest):
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
     builder = get_builder_by_username(request.username)
-    if not builder or builder['password'] != request.password:
+    if not builder or not verify_password(request.password, builder['password']):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     session_id = str(uuid.uuid4())

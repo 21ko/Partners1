@@ -109,7 +109,7 @@ const App: React.FC = () => {
       >
         {(() => {
           switch (activeTab) {
-            case 'dashboard': return <Dashboard setActiveTab={setActiveTab} />;
+            case 'dashboard': return <Dashboard setActiveTab={setActiveTab} user={user || undefined} />;
             case 'explore': return <Explore />;
             case 'matchmaker': return <Matchmaker />;
             case 'profile': return user ? <Profile user={user} onUpdate={handleUserUpdate} /> : <Dashboard setActiveTab={setActiveTab} />;
