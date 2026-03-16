@@ -69,7 +69,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
       try {
         const res  = await fetch(`${API_URL}/communities`);
         const data = await safeJson(res);
-        setCommunities(data);
+        setCommunities(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to fetch communities', e);
       } finally {

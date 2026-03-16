@@ -37,7 +37,7 @@ const Discover: React.FC = () => {
 
       const res = await fetch(`${API_URL}/discover?${params.toString()}`);
       const data = await safeJson(res);
-      setBuilders(data);
+      setBuilders(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Failed to fetch builders', e);
     } finally {

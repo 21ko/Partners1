@@ -179,24 +179,37 @@ Return ONLY the bio. No quotes, no extra text.
 # ============================================
 
 def calculate_skill_synergy(user1: dict, user2: dict) -> int:
-    score = 40
+    score = 30  # Lowered base for stricter matching
 
     interests1 = set(user1.get("interests", []))
     interests2 = set(user2.get("interests", []))
     score += len(interests1 & interests2) * 10
 
-    knows1 = set(user1.get("github_languages", []))
-    wants2 = set(user2.get("learning", []))
-    score += len(knows1 & wants2) * 20
+    knows1 = set(u.lower() for u in user1.get("github_languages", []))
+    wants1 = set(u.lower() for u in user1.get("learning", []))
+    knows2 = set(u.lower() for u in user2.get("github_languages", []))
+    wants2 = set(u.lower() for u in user2.get("learning", []))
 
-    knows2 = set(user2.get("github_languages", []))
-    wants1 = set(user1.get("learning", []))
-    score += len(knows2 & wants1) * 20
+    # Synergy: teach what the other wants to learn
+    teachable1 = len(knows1 & wants2) * 20
+    teachable2 = len(knows2 & wants1) * 20
+    score += min(40, teachable1 + teachable2)
 
+    # Ecosystem complementarity
+    cats1 = _get_categories(list(knows1))
+    cats2 = _get_categories(list(knows2))
+    if ("frontend" in cats1 and "backend" in cats2) or ("backend" in cats1 and "frontend" in cats2):
+        score += 15
+    if ("ml" in cats1 and "frontend" in cats2) or ("frontend" in cats1 and "ml" in cats2):
+        score += 15
+
+    # Style match
     if user1.get("building_style") == user2.get("building_style"):
         score += 15
 
-    score += len(knows1 & knows2) * 5
+    # Shared stack (capped at 8)
+    shared = len(knows1 & knows2) * 4
+    score += min(8, shared)
 
     if (user1.get("city") and user2.get("city")
             and user1["city"].lower() == user2["city"].lower()):

@@ -1,15 +1,31 @@
 import { Builder, AuthResponse, Session } from '../types';
 
 export const getApiUrl = () => {
-    try {
-        const meta = import.meta as any;
-        if (meta && meta.env && meta.env.VITE_API_URL) {
-            return meta.env.VITE_API_URL.replace(/\/$/, '');
-        }
-    } catch (e) {
-        console.error('API_URL_RESOLUTION_FAILED:', e);
+    // 1. Check for build-time environment variable (standard Vite)
+    const envUrl = (import.meta as any).env?.VITE_API_URL;
+    if (envUrl && !envUrl.includes('localhost')) {
+        return envUrl.replace(/\/$/, '');
     }
-    return 'http://localhost:8000';
+
+    // 2. Check for process.env (fallback for some build tools)
+    try {
+        const procUrl = typeof process !== 'undefined' ? (process as any).env?.VITE_API_URL : null;
+        if (procUrl && !procUrl.includes('localhost')) {
+            return procUrl.replace(/\/$/, '');
+        }
+    } catch (e) {}
+
+    // 3. Smart Production Fallback
+    // If we are on the main domain but VITE_API_URL is missing/localhost,
+    // we likely have a deployment misconfiguration.
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+        // We don't have the Railway URL, so we warn the user or try a convention
+        console.warn('PRODUCTION_API_URL_MISSING: Defaulting to local. Ensure VITE_API_URL is set in Vercel.');
+        // Return a broken but obvious URL or the most likely one if known
+        // return 'https://partners-production.up.railway.app'; 
+    }
+
+    return (envUrl || 'http://localhost:8000').replace(/\/$/, '');
 };
 
 export const API_URL = getApiUrl();
