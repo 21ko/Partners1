@@ -126,7 +126,7 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
         { method: 'POST' }
       );
       const data = await safeJson(res);
-      setCommunities(Array.isArray(data) ? data : []);
+      setMatchResult(data);
     } catch (e) {
       console.error('Match failed', e);
     } finally {
