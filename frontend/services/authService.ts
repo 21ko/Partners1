@@ -16,13 +16,10 @@ export const getApiUrl = () => {
     } catch (e) {}
 
     // 3. Smart Production Fallback
-    // If we are on the main domain but VITE_API_URL is missing/localhost,
-    // we likely have a deployment misconfiguration.
-    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
-        // We don't have the Railway URL, so we warn the user or try a convention
-        console.warn('PRODUCTION_API_URL_MISSING: Defaulting to local. Ensure VITE_API_URL is set in Vercel.');
-        // Return a broken but obvious URL or the most likely one if known
-        // return 'https://partners-production.up.railway.app'; 
+    // If we are on a production domain but VITE_API_URL is missing/localhost,
+    // use the verified backend URL.
+    if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+        return 'https://partners1-production.up.railway.app';
     }
 
     return (envUrl || 'http://localhost:8000').replace(/\/$/, '');

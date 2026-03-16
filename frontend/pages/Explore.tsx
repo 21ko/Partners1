@@ -50,6 +50,7 @@ interface Community {
 const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActiveTab }) => {
   const [communities, setCommunities]       = useState<Community[]>([]);
   const [loadingComms, setLoadingComms]     = useState(true);
+  const [errorComms, setErrorComms]         = useState<string | null>(null);
   const [selectedComm, setSelectedComm]     = useState<Community | null>(null);
   const [members, setMembers]               = useState<Builder[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -66,12 +67,15 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
   useEffect(() => {
     const load = async () => {
       setLoadingComms(true);
+      setErrorComms(null);
       try {
         const res  = await fetch(`${API_URL}/communities`);
+        if (!res.ok) throw new Error(`SERVER_ERROR_${res.status}`);
         const data = await safeJson(res);
         setCommunities(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error('Failed to fetch communities', e);
+        setErrorComms('BACKEND_UNREACHABLE_OR_OFFLINE');
       } finally {
         setLoadingComms(false);
       }
@@ -205,6 +209,17 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
             {[...Array(6)].map((_, i) => (
               <div key={i} className="h-36 bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
             ))}
+          </div>
+        ) : errorComms ? (
+          <div className="text-center py-20 border border-red-500/20 bg-red-500/5 rounded-2xl">
+            <p className="text-red-400 font-mono text-xs uppercase tracking-widest">{errorComms}</p>
+            <p className="text-slate-600 font-mono text-[10px] mt-2">SYSTEM_ENDPOINT: {API_URL}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-1.5 border border-red-500/30 text-red-400 font-mono text-[10px] rounded-lg hover:bg-red-500/10 transition-all"
+            >
+              RETRY_CONNECTION
+            </button>
           </div>
         ) : communities.length === 0 ? (
           <div className="text-center py-20 border border-slate-800 border-dashed rounded-2xl">

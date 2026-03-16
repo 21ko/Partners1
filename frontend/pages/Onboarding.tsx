@@ -49,6 +49,11 @@ const getApiUrl = () => {
         }
     } catch (e) {}
 
+    // 3. Smart Production Fallback
+    if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+        return 'https://partners1-production.up.railway.app';
+    }
+
     return (envUrl || 'http://localhost:8000').replace(/\/$/, '');
 };
 
