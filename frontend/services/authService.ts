@@ -1,31 +1,8 @@
 import { Builder, AuthResponse, Session } from '../types';
 
-export const getApiUrl = () => {
-    // 1. Check for build-time environment variable (standard Vite)
-    const envUrl = (import.meta as any).env?.VITE_API_URL;
-    if (envUrl && !envUrl.includes('localhost')) {
-        return envUrl.replace(/\/$/, '');
-    }
-
-    // 2. Check for process.env (fallback for some build tools)
-    try {
-        const procUrl = typeof process !== 'undefined' ? (process as any).env?.VITE_API_URL : null;
-        if (procUrl && !procUrl.includes('localhost')) {
-            return procUrl.replace(/\/$/, '');
-        }
-    } catch (e) {}
-
-    // 3. Smart Production Fallback
-    // If we are on a production domain but VITE_API_URL is missing/localhost,
-    // use the verified backend URL.
-    if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
-        return 'https://partners1-production.up.railway.app';
-    }
-
-    return (envUrl || 'http://localhost:8000').replace(/\/$/, '');
-};
-
-export const API_URL = getApiUrl();
+export const API_URL = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? 'https://partners1-production.up.railway.app'
+    : (((import.meta as any).env?.VITE_API_URL) || 'http://localhost:8000');
 
 export const safeJson = async (res: Response) => {
     const contentType = res.headers.get('content-type');
@@ -76,7 +53,6 @@ export const authService = {
         if (!res.ok) throw new Error(await res.text());
         const data = await safeJson(res);
 
-        // Update local session
         session.profile = data.profile;
         session.needs_onboarding = false;
         this.saveSession(session);
