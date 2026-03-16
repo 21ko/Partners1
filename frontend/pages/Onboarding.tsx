@@ -35,11 +35,21 @@ const STYLE_OPTIONS = [
 ];
 
 const getApiUrl = () => {
+    // 1. Check for build-time environment variable (standard Vite)
+    const envUrl = (import.meta as any).env?.VITE_API_URL;
+    if (envUrl && !envUrl.includes('localhost')) {
+        return envUrl.replace(/\/$/, '');
+    }
+
+    // 2. Check for process.env (fallback for some build tools)
     try {
-        if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) return (import.meta as any).env.VITE_API_URL;
-        if (typeof process !== 'undefined' && (process as any).env?.VITE_API_URL) return (process as any).env.VITE_API_URL;
-    } catch (e) { }
-    return 'http://localhost:8000';
+        const procUrl = typeof process !== 'undefined' ? (process as any).env?.VITE_API_URL : null;
+        if (procUrl && !procUrl.includes('localhost')) {
+            return procUrl.replace(/\/$/, '');
+        }
+    } catch (e) {}
+
+    return (envUrl || 'http://localhost:8000').replace(/\/$/, '');
 };
 
 const API_URL = getApiUrl();

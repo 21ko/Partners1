@@ -34,6 +34,7 @@ const Discover: React.FC = () => {
       const params = new URLSearchParams();
       if (session?.session_id) params.set('session_id', session.session_id);
       if (interest) params.set('filter_interest', interest);
+      if (localOnly) params.set('local_only', 'true');
 
       const res = await fetch(`${API_URL}/discover?${params.toString()}`);
       const data = await safeJson(res);

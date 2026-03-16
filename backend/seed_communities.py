@@ -1,39 +1,35 @@
-from database import create_community, get_communities, join_community
 import os
+import psycopg2
+from database import DB_URL, get_db_conn
 
 def seed():
-    existing = get_communities()
-    if existing:
-        print(f"[seed] {len(existing)} communities already exist. skipping.")
-        return
-
-    print("[seed] pre-populating communities...")
-    
-    cities = [
-        ("Paris Builders", "Community for developers and makers in Paris.", "city"),
-        ("London Tech", "Building the future in London.", "city"),
-        ("Berlin Hackers", "Berlin-based builders and founders.", "city"),
-        ("San Francisco Hub", "Connect with builders in the heart of SF.", "city"),
-        ("Casablanca Devs", "Growing the tech ecosystem in Casablanca.", "city")
-    ]
-    
-    interests = [
-        ("AI Builders", "Everything LLMs, agents, and generative AI.", "interest"),
-        ("Frontend Hub", "React, Vue, Design Systems, and UI polish.", "interest"),
-        ("Backend Mastery", "Scalable systems, databases, and infra.", "interest"),
-        ("Mobile Makers", "Flutter, Swift, Kotlin & cross-platform apps.", "interest")
-    ]
-    
-    hackathons = [
-        ("Global Build Week 2026", "A 1-week virtual hackathon for everyone.", "hackathon"),
-        ("Open Source Sprint", "Let's contribute to meaningful projects together.", "hackathon")
+    communities = [
+        ("Paris Innov Hack", "The official sector for the 2026 Paris Innov hackathon. Build something bold.", "hackathon"),
+        ("Weekend Warriors", "Casual builders shipping projects every Friday-Sunday.", "general"),
+        ("AI Agents & LLMs", "Explorers building the next generation of agentic systems.", "interest"),
+        ("Frontend Wizards", "UI/UX obsessed builders focusing on beautiful experiences.", "design"),
+        ("Rust & Systems", "Hardcore low-level enthusiasts building high-performance systems.", "stack")
     ]
 
-    for name, desc, ctype in cities + interests + hackathons:
-        cid = create_community(name, desc, type=ctype)
-        print(f"  [+] created: {name} ({cid})")
-
-    print("[seed] done.")
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        
+        print(f"Seeding {len(communities)} communities...")
+        for name, desc, ctype in communities:
+            cur.execute("""
+                INSERT INTO communities (name, description, type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (name) DO NOTHING
+            """, (name, desc, ctype))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("Done! Explore page should now have data.")
+    except Exception as e:
+        print(f"Seeding failed: {e}")
+        print("Make sure DATABASE_URL is set correctly in your environment.")
 
 if __name__ == "__main__":
     seed()

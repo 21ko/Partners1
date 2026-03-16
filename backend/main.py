@@ -340,31 +340,47 @@ async def discover_builders(
     session_id: Optional[str] = None,
     limit: int = 20,
     filter_interest: Optional[str] = None,
-    filter_availability: Optional[str] = None
+    filter_availability: Optional[str] = None,
+    local_only: bool = False
 ):
     current_username = get_session_username(session_id) if session_id else None
+    current_builder = _row_to_dict(get_builder_by_username(current_username)) if current_username else None
+    
     all_builders = [_row_to_dict(b) for b in get_builders()]
 
     # Exclude self
     if current_username:
         all_builders = [b for b in all_builders if b['username'] != current_username]
 
+    # Filter by city if local_only is ON and we have a current user with a city
+    if local_only and current_builder and current_builder.get('city'):
+        my_city = current_builder['city'].lower().strip()
+        all_builders = [
+            b for b in all_builders 
+            if b.get('city') and b.get('city').lower().strip() == my_city
+        ]
+
     # Filter by skill — searches languages, interests, learning, bio, repo languages
     if filter_interest:
         search = filter_interest.lower().strip()
         def builder_matches(b):
-            if any(search in lang.lower() for lang in b.get('github_languages', [])):
+            # Check github_languages (list)
+            if any(search in str(lang).lower() for lang in b.get('github_languages', []) if lang):
                 return True
-            if any(search in i.lower() for i in b.get('interests', [])):
+            # Check interests (list)
+            if any(search in str(i).lower() for i in b.get('interests', []) if i):
                 return True
-            if any(search in l.lower() for l in b.get('learning', [])):
+            # Check learning (list)
+            if any(search in str(l).lower() for l in b.get('learning', []) if l):
                 return True
+            # Check bio (string)
             if search in b.get('bio', '').lower():
                 return True
+            # Check repo languages (list of dicts)
             repo_langs = [
-                r.get('language', '').lower()
+                str(r.get('language', '')).lower()
                 for r in b.get('github_repos', [])
-                if r.get('language')
+                if r and isinstance(r, dict) and r.get('language')
             ]
             return any(search in lang for lang in repo_langs)
         all_builders = [b for b in all_builders if builder_matches(b)]
