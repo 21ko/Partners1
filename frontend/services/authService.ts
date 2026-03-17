@@ -77,6 +77,21 @@ export const authService = {
         localStorage.removeItem('partners_session');
     },
 
+    async logout(): Promise<void> {
+        const session = this.getSession();
+        if (session?.session_id) {
+            // Delete session from DB so the token can't be reused
+            try {
+                await fetch(`${API_URL}/logout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: session.session_id })
+                });
+            } catch { /* ignore — still clear local session */ }
+        }
+        this.clearSession();
+    },
+
     isAuthenticated(): boolean {
         return !!this.getSession();
     },

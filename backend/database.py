@@ -10,19 +10,17 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password. Supports plain-text fallback for existing users."""
+    """Verify a password against its bcrypt hash."""
     if not hashed_password:
         return False
-    
-    # Check if it looks like a bcrypt hash (starts with $2b$ or $2a$)
-    if hashed_password.startswith('$2b$') or hashed_password.startswith('$2a$'):
-        try:
-            return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-        except Exception:
-            return False
-    
-    # Fallback to plain text comparison for legacy users
-    return plain_password == hashed_password
+    if not (hashed_password.startswith('$2b$') or hashed_password.startswith('$2a$')):
+        # Not a bcrypt hash — reject. Run migration to rehash legacy accounts.
+        print("[auth] WARNING: plain-text password detected for a user — login blocked until rehashed")
+        return False
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 load_dotenv()
 
@@ -122,6 +120,13 @@ def get_session_username(session_id: str):
             cur.execute("SELECT username FROM sessions WHERE session_id = %s", (session_id,))
             res = cur.fetchone()
             return res['username'] if res else None
+
+def delete_session(session_id: str):
+    """Delete a specific session row (used by /logout)."""
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM sessions WHERE session_id = %s", (session_id,))
+        conn.commit()
 
 def delete_expired_sessions(days=30):
     from datetime import datetime, timedelta

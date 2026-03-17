@@ -27,3 +27,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy flat-file storage (replaced by Supabase)
+backend/builders.json
+backend/users.json

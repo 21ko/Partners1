@@ -6,6 +6,7 @@ import uvicorn
 import os
 import json
 import uuid
+import re
 from datetime import datetime
 import httpx
 
@@ -17,6 +18,8 @@ from database import (
     upsert_builder,
     save_session,
     get_session_username,
+    delete_session,
+    delete_expired_sessions,
     get_communities,
     get_community_by_id,
     get_community_members,
@@ -31,9 +34,20 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
+# Restrict CORS to known origins; allow localhost for local dev
+_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://partners1-21ko.vercel.app",
+    "https://partners1.vercel.app",
+    # Accept any vercel.app subdomain to survive preview deploys
+]
+_ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,6 +123,12 @@ class CommunityResponse(BaseModel):
 
 class JoinCommunityRequest(BaseModel):
     session_id: str
+
+class LogoutRequest(BaseModel):
+    session_id: str
+
+# Username: 3-30 chars, alphanumeric + underscore only
+USERNAME_RE = re.compile(r'^[a-zA-Z0-9_]{3,30}$')
 
 # ============================================
 # HELPERS
@@ -229,6 +249,13 @@ async def fetch_github_data(github_username: str) -> dict:
 
 @app.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
+    if not USERNAME_RE.match(request.username):
+        raise HTTPException(
+            status_code=400,
+            detail="Username must be 3-30 characters: letters, numbers, underscore only"
+        )
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     if get_builder_by_username(request.username):
         raise HTTPException(status_code=400, detail="Username already taken")
 
@@ -289,6 +316,11 @@ async def login(request: LoginRequest):
         profile=_safe_profile(builder),
         needs_onboarding=False
     )
+
+@app.post("/logout")
+async def logout(request: LogoutRequest):
+    delete_session(request.session_id)
+    return {"success": True}
 
 # ============================================
 # PROFILE ENDPOINTS
@@ -499,16 +531,21 @@ async def join_community_endpoint(community_id: str, request: JoinCommunityReque
 async def health_check():
     try:
         builders = get_builders()
+        # Clean up stale sessions on every health check (runs ~every 5 min on Railway)
+        try:
+            delete_expired_sessions(days=30)
+        except Exception:
+            pass
         return {
             "status": "ok",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "db": "ok",
             "total_builders": len(builders),
         }
     except Exception as e:
         return {
             "status": "degraded",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "db": f"error: {type(e).__name__}",
             "total_builders": 0,
         }
