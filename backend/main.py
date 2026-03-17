@@ -34,20 +34,10 @@ app = FastAPI(
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-# Restrict CORS to known origins; allow localhost for local dev
-_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://partners1-21ko.vercel.app",
-    "https://partners1.vercel.app",
-    # Accept any vercel.app subdomain to survive preview deploys
-]
-_ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"
-
+# CORS: allow all origins for now (see CHANGELOG to-do for domain restriction)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_ALLOWED_ORIGINS,
-    allow_origin_regex=_ALLOWED_ORIGIN_REGEX,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
