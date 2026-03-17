@@ -34,30 +34,11 @@ const STYLE_OPTIONS = [
     { id: 'figures_it_out', label: 'Figures it Out', desc: 'Experimental and agile' }
 ];
 
-const getApiUrl = () => {
-    // 1. Check for build-time environment variable (standard Vite)
-    const envUrl = (import.meta as any).env?.VITE_API_URL;
-    if (envUrl && !envUrl.includes('localhost')) {
-        return envUrl.replace(/\/$/, '');
-    }
+const RAILWAY_URL = 'https://partners1-production.up.railway.app';
 
-    // 2. Check for process.env (fallback for some build tools)
-    try {
-        const procUrl = typeof process !== 'undefined' ? (process as any).env?.VITE_API_URL : null;
-        if (procUrl && !procUrl.includes('localhost')) {
-            return procUrl.replace(/\/$/, '');
-        }
-    } catch (e) {}
-
-    // 3. Smart Production Fallback
-    if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
-        return 'https://partners1-production.up.railway.app';
-    }
-
-    return (envUrl || 'http://localhost:8000').replace(/\/$/, '');
-};
-
-const API_URL = getApiUrl();
+const API_URL = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+    ? RAILWAY_URL
+    : ((import.meta as any).env?.VITE_API_URL || 'http://localhost:8000');
 
 const safeJson = async (res: Response) => {
     const contentType = res.headers.get('content-type');

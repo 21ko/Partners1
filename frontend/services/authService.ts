@@ -1,8 +1,17 @@
 import { Builder, AuthResponse, Session } from '../types';
 
-export const API_URL = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
-    ? 'https://partners1-production.up.railway.app'
-    : (((import.meta as any).env?.VITE_API_URL) || 'http://localhost:8000');
+const RAILWAY_URL = 'https://partners1-production.up.railway.app';
+
+// Determine API URL: always use Railway in production (non-localhost), allow override via env var in dev
+export const API_URL = (() => {
+    if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+        // Production: always use Railway, ignore any stale VITE_API_URL
+        return RAILWAY_URL;
+    }
+    // Local dev: use env var or localhost fallback
+    return ((import.meta as any).env?.VITE_API_URL) || 'http://localhost:8000';
+})();
+
 
 export const safeJson = async (res: Response) => {
     const contentType = res.headers.get('content-type');
