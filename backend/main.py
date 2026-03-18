@@ -294,8 +294,9 @@ async def register(request: RegisterRequest):
 
 @app.post("/login", response_model=AuthResponse)
 async def login(request: LoginRequest):
-    builder = get_builder_by_username(request.username)
-    if not builder or not verify_password(request.password, builder['password']):
+    builder_raw = get_builder_by_username(request.username)
+    builder = _row_to_dict(builder_raw) if builder_raw else None
+    if not builder or not verify_password(request.password, builder_raw['password']):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     session_id = str(uuid.uuid4())
