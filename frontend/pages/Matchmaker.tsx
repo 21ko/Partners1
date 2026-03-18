@@ -178,13 +178,7 @@ const Discover: React.FC = () => {
 
       {/* Builders Grid */}
       <section>
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-[400px] bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
-            ))}
-          </div>
-        ) : builders.length === 0 ? (
+        {builders.length === 0 && !loading ? (
           <div className="text-center py-24 bg-slate-900/20 rounded-3xl border border-slate-800 border-dashed">
             <p className="text-slate-500 font-mono text-sm uppercase tracking-widest">No_Builders_Detected_In_Sector</p>
             <button
@@ -195,7 +189,7 @@ const Discover: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
             {builders.map((builder, i) => (
               <BuilderCard
                 key={builder.username}

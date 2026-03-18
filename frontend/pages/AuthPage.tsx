@@ -32,6 +32,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
             onAuthSuccess(session);
         } catch (err: any) {
             setError(err.message || 'Authentication failed');
+            setPassword('');
         } finally {
             setLoading(false);
         }
@@ -122,6 +123,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                autoComplete="new-password"
                                 className="w-full bg-[#0A0F1C] border border-slate-800 rounded-xl px-4 py-4 text-white font-mono text-sm focus:ring-1 focus:ring-terminal-green outline-none"
                             />
                         </div>
@@ -133,13 +135,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
                         </div>
                     )}
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-6 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(0,255,65,0.1)] uppercase"
-                    >
-                        {loading ? 'EXECUTING...' : isLogin ? 'SIGN_IN.EXE' : 'CREATE_ACCOUNT.OBJ'}
-                    </button>
+                    <div className="pt-4">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-6 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(0,255,65,0.1)] uppercase"
+                        >
+                            {loading ? 'EXECUTING...' : isLogin ? 'SIGN_IN.EXE' : 'CREATE_ACCOUNT.OBJ'}
+                        </button>
+                    </div>
 
                     <footer className="text-center pt-4">
                         <button

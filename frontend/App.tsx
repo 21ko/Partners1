@@ -11,7 +11,15 @@ import { Builder, Session } from './types';
 import { authService } from './services/authService';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabState] = useState(() => {
+    const path = window.location.pathname.replace('/', '');
+    return ['dashboard', 'explore', 'matchmaker', 'profile'].includes(path) ? path : 'dashboard';
+  });
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    window.history.pushState(null, '', `/${tab}`);
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
@@ -25,8 +33,19 @@ const App: React.FC = () => {
       setUser(session.profile);
       setNeedsOnboarding(session.needs_onboarding || false);
     }
+    const handlePopState = () => {
+      const path = window.location.pathname.replace('/', '');
+      if (['dashboard', 'explore', 'matchmaker', 'profile'].includes(path)) {
+        setActiveTabState(path);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
     const timer = setTimeout(() => setIsLoading(false), 1200);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   const handleAuthSuccess = (session: Session) => {
@@ -125,9 +144,7 @@ const App: React.FC = () => {
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
 
       <main className="flex-grow container mx-auto px-6 py-12 max-w-6xl">
-        <AnimatePresence mode="wait">
-          {renderContent()}
-        </AnimatePresence>
+        {renderContent()}
       </main>
 
       <footer className="py-12 border-t border-slate-900 bg-[#0A0F1C]">

@@ -152,11 +152,11 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
         />
       </section>
 
-      <div className="flex justify-end">
+      <div className="sticky bottom-0 left-0 right-0 z-50 p-6 bg-[#0A0F1C]/80 backdrop-blur-xl border-t border-slate-800 flex justify-end -mx-6 mb-[-3rem]">
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-12 rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,255,65,0.2)] disabled:opacity-50"
+          className="bg-terminal-green text-[#0A0F1C] font-mono font-black py-4 px-12 rounded-xl hover:scale-105 transition-all shadow-[0_0_20px_rgba(0,255,65,0.2)] disabled:opacity-50 flex items-center gap-3"
         >
           {isSaving ? 'UPLOADING...' : 'COMMIT_CHANGES.SH'}
         </button>

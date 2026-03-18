@@ -105,8 +105,11 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
               >
                 FIND_PARTNER.EXE
               </button>
-              <button className="border border-slate-800 text-white font-mono py-4 px-8 rounded-xl hover:bg-slate-800 transition-all">
-                VIEW_SESSION_LOGS
+              <button 
+                onClick={() => setActiveTab('profile')}
+                className="border border-slate-800 text-white font-mono py-4 px-8 rounded-xl hover:bg-slate-800 transition-all"
+              >
+                EDIT_PROFILE.EXE
               </button>
             </motion.div>
           </div>
@@ -208,8 +211,8 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                         ))}
                       </div>
                     ) : commMembers.length === 0 ? (
-                      <div className="py-20 text-center">
-                        <p className="text-slate-600 font-mono text-xs">NO_COGNITIVE_SIGNATURES_FOUND</p>
+                      <div className="py-20 text-center space-y-4 border border-dashed border-slate-800 rounded-2xl bg-slate-900/10">
+                        <p className="text-slate-500 font-mono text-xs tracking-widest uppercase">HUD_EMPTY // BE_THE_FIRST_TO_ESTABLISH_UPLINK</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3">
