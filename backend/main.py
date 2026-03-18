@@ -175,21 +175,28 @@ def _safe_profile(row) -> BuilderProfile:
 async def fetch_github_data(github_username: str) -> dict:
     try:
         async with httpx.AsyncClient() as client:
+            headers = {"Accept": "application/vnd.github.v3+json"}
+            github_token = os.environ.get("GITHUB_TOKEN")
+            if github_token:
+                headers["Authorization"] = f"token {github_token}"
+
             profile_res = await client.get(
                 f"https://api.github.com/users/{github_username}",
-                headers={"Accept": "application/vnd.github.v3+json"},
+                headers=headers,
                 timeout=10.0
             )
             if profile_res.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"GitHub user '{github_username}' not found")
             if profile_res.status_code != 200:
+                err_text = profile_res.text
+                print(f"[github] API Error for {github_username}: {profile_res.status_code} - {err_text}")
                 raise HTTPException(status_code=500, detail="GitHub API error")
 
             profile = profile_res.json()
 
             repos_res = await client.get(
                 f"https://api.github.com/users/{github_username}/repos?sort=updated&per_page=10",
-                headers={"Accept": "application/vnd.github.v3+json"},
+                headers=headers,
                 timeout=10.0
             )
             repos = repos_res.json() if repos_res.status_code == 200 else []
