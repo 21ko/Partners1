@@ -10,7 +10,7 @@ import resend
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
 FROM_ADDRESS = "onboarding@resend.dev"
-APP_URL = os.environ.get("APP_URL", "https://partners.vercel.app")
+APP_URL = os.environ.get("APP_URL", "https://partners1.vercel.app")
 
 VIBE_COLORS = {
     "🔥 Strong vibe": "#00FF41",
