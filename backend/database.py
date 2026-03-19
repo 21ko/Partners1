@@ -103,6 +103,51 @@ def upsert_builder(builder_data: dict):
             cur.execute(query, values)
         conn.commit()
 
+def create_follows_table():
+    sql = """
+    CREATE TABLE IF NOT EXISTS follows (
+        follower_username VARCHAR(255) REFERENCES builders(username) ON DELETE CASCADE,
+        following_username VARCHAR(255) REFERENCES builders(username) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (follower_username, following_username)
+    );
+    """
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+def toggle_follow(follower: str, following: str) -> bool:
+    """Returns True if followed, False if unfollowed."""
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM follows WHERE follower_username = %s AND following_username = %s", (follower, following))
+            exists = cur.fetchone()
+            if exists:
+                cur.execute("DELETE FROM follows WHERE follower_username = %s AND following_username = %s", (follower, following))
+                following_status = False
+            else:
+                cur.execute("INSERT INTO follows (follower_username, following_username) VALUES (%s, %s)", (follower, following))
+                following_status = True
+        conn.commit()
+        return following_status
+
+def get_follow_stats(username: str):
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) as count FROM follows WHERE following_username = %s", (username,))
+            followers = cur.fetchone()['count']
+            cur.execute("SELECT count(*) as count FROM follows WHERE follower_username = %s", (username,))
+            following = cur.fetchone()['count']
+            return {"followers": followers, "following": following}
+
+def is_following(follower: str, following: str) -> bool:
+    if not follower or not following: return False
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM follows WHERE follower_username = %s AND following_username = %s", (follower, following))
+            return bool(cur.fetchone())
+
 # Helper for sessions
 def save_session(session_id: str, username: str):
     with db_session() as conn:
@@ -198,3 +243,9 @@ def get_user_communities(username: str):
                 WHERE cm.username = %s
             """, (username,))
             return cur.fetchall()
+
+def get_following_list(username: str) -> List[str]:
+    with db_session() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT following_username FROM follows WHERE follower_username = %s", (username,))
+            return [row['following_username'] for row in cur.fetchall()]

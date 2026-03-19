@@ -128,5 +128,29 @@ export const authService = {
         });
         if (!res.ok) throw new Error(await res.text());
         return await safeJson(res);
+    },
+
+    async followUser(targetUsername: string): Promise<any> {
+        const session = this.getSession();
+        if (!session) throw new Error('Not authenticated');
+
+        const res = await fetch(`${API_URL}/profile/${targetUsername}/follow`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: session.session_id })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return await safeJson(res);
+    },
+
+    async getUserStats(username: string): Promise<any> {
+        const session = this.getSession();
+        const url = new URL(`${API_URL}/profile/${username}/stats`);
+        if (session?.session_id) {
+            url.searchParams.append('session_id', session.session_id);
+        }
+        const res = await fetch(url.toString());
+        if (!res.ok) throw new Error(await res.text());
+        return await safeJson(res);
     }
 };

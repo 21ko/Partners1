@@ -26,7 +26,18 @@ from database import (
     join_community as db_join_community,
     hash_password,
     verify_password,
+    create_follows_table,
+    toggle_follow,
+    get_follow_stats,
+    is_following as db_is_following,
+    get_following_list,
 )
+
+# Initialize DB tables
+try:
+    create_follows_table()
+except Exception as e:
+    print(f"[db] Startup migration failed: {e}")
 
 app = FastAPI(
     title="Partners API",
@@ -116,6 +127,10 @@ class JoinCommunityRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     session_id: str
+
+class FollowRequest(BaseModel):
+    session_id: str
+
 
 # Username: 3-30 chars, alphanumeric + underscore only
 USERNAME_RE = re.compile(r'^[a-zA-Z0-9_]{3,30}$')
@@ -349,9 +364,42 @@ async def update_profile(request: UpdateProfileRequest):
 
     updated['updated_at'] = datetime.now().isoformat()
     upsert_builder(updated)
+    return {"success": True, "profile": _safe_profile(updated)}
 
-    profile = {k: v for k, v in updated.items() if k not in ('password', 'email')}
-    return {"success": True, "profile": BuilderProfile(**profile)}
+@app.post("/profile/{target_username}/follow")
+async def follow_user(target_username: str, request: FollowRequest):
+    current_username = get_session_username(request.session_id)
+    if not current_username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    if current_username == target_username:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+
+    status = toggle_follow(current_username, target_username)
+    return {"following": status}
+
+@app.get("/profile/{username}/stats")
+async def get_user_stats(username: str, session_id: Optional[str] = None):
+    # Stats are public, but we can return 'is_following' if session is provided
+    stats = get_follow_stats(username)
+    
+    current_username = get_session_username(session_id) if session_id else None
+    following_status = False
+    if current_username:
+        following_status = db_is_following(current_username, username)
+        
+    return {
+        **stats,
+        "is_following": following_status
+    }
+
+@app.get("/profile/following", response_model=List[str])
+async def list_following(session_id: str):
+    username = get_session_username(session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return get_following_list(username)
+
 
 
 @app.get("/profile/{username}", response_model=BuilderProfile)

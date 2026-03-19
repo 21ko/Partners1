@@ -59,6 +59,8 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
   const [matchLoading, setMatchLoading] = useState<string | null>(null);
   const [matchResult, setMatchResult] = useState<any | null>(null);
   const [matchedBuilder, setMatchedBuilder] = useState<Builder | null>(null);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followLoading, setFollowLoading] = useState<string | null>(null);
 
   const session = authService.getSession();
 
@@ -131,6 +133,24 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
       console.error('Match failed', e);
     } finally {
       setMatchLoading(null);
+    }
+  };
+
+  const handleToggleFollow = async (username: string) => {
+    if (!session?.session_id) return;
+    setFollowLoading(username);
+    try {
+      const { following } = await authService.followUser(username);
+      setFollowingIds(prev => {
+        const next = new Set(prev);
+        if (following) next.add(username);
+        else next.delete(username);
+        return next;
+      });
+    } catch (e) {
+      console.error('Follow failed', e);
+    } finally {
+      setFollowLoading(null);
     }
   };
 
@@ -382,6 +402,9 @@ const Explore: React.FC<{ setActiveTab?: (tab: string) => void }> = ({ setActive
                       onMatch={() => handleMatch(member)}
                       matchLoading={matchLoading === member.username}
                       isCurrentUser={member.username === session?.profile?.username}
+                      isFollowing={followingIds.has(member.username)}
+                      onFollow={() => handleToggleFollow(member.username)}
+                      followLoading={followLoading === member.username}
                     />
                   ))
                 )}
@@ -542,9 +565,12 @@ interface MemberRowProps {
   onMatch: () => void;
   matchLoading: boolean;
   isCurrentUser: boolean;
+  isFollowing: boolean;
+  onFollow: () => void;
+  followLoading: boolean;
 }
 
-const MemberRow: React.FC<MemberRowProps> = ({ member, onMatch, matchLoading, isCurrentUser }) => (
+const MemberRow: React.FC<MemberRowProps> = ({ member, onMatch, matchLoading, isCurrentUser, isFollowing, onFollow, followLoading }) => (
   <div className="group p-4 bg-slate-900/50 border border-slate-800 hover:border-slate-700 rounded-xl flex items-center justify-between transition-all">
     <div className="flex items-center gap-3 min-w-0">
       <img
@@ -577,23 +603,36 @@ const MemberRow: React.FC<MemberRowProps> = ({ member, onMatch, matchLoading, is
     </div>
 
     {!isCurrentUser && (
-      <button
-        onClick={onMatch}
-        disabled={matchLoading}
-        className="flex-shrink-0 ml-3 text-[10px] font-mono font-black px-3 py-2 rounded-lg border border-terminal-blue/30 text-terminal-blue hover:bg-terminal-blue hover:text-[#0A0F1C] transition-all disabled:opacity-50 relative overflow-hidden"
-      >
-        <span className="relative z-10">
-          {matchLoading ? '...' : 'CHEMISTRY'}
-        </span>
-        {matchLoading && (
-          <motion.div
-            className="absolute inset-0 bg-terminal-blue/20"
-            initial={{ x: '-100%' }}
-            animate={{ x: '100%' }}
-            transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-          />
-        )}
-      </button>
+      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+        <button
+          onClick={onFollow}
+          disabled={followLoading}
+          className={`text-[9px] font-mono font-black px-3 py-2 rounded-lg border transition-all ${
+            isFollowing 
+              ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' 
+              : 'border-terminal-green/30 text-terminal-green hover:bg-terminal-green/10'
+          }`}
+        >
+          {followLoading ? '...' : isFollowing ? 'UNFOLLOW' : 'FOLLOW'}
+        </button>
+        <button
+          onClick={onMatch}
+          disabled={matchLoading}
+          className="text-[10px] font-mono font-black px-3 py-2 rounded-lg border border-terminal-blue/30 text-terminal-blue hover:bg-terminal-blue hover:text-[#0A0F1C] transition-all disabled:opacity-50 relative overflow-hidden"
+        >
+          <span className="relative z-10">
+            {matchLoading ? '...' : 'CHEMISTRY'}
+          </span>
+          {matchLoading && (
+            <motion.div
+              className="absolute inset-0 bg-terminal-blue/20"
+              initial={{ x: '-100%' }}
+              animate={{ x: '100%' }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+            />
+          )}
+        </button>
+      </div>
     )}
   </div>
 );
