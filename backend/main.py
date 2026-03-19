@@ -33,19 +33,13 @@ from database import (
     get_following_list,
 )
 
-# Initialize DB tables
-try:
-    create_follows_table()
-except Exception as e:
-    print(f"[db] Startup migration failed: {e}")
-
+# ── App init ───────────────────────────────────────────────────
 app = FastAPI(
     title="Partners API",
-    version="1.0.0",
+    version="1.1.0",
     description="Find someone to build with. No pitch decks. Just builders."
 )
 
-# CORS: allow all origins for now (see CHANGELOG to-do for domain restriction)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,6 +47,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── DB startup migration ───────────────────────────────────────
+try:
+    create_follows_table()
+except Exception as e:
+    print(f"[db] Startup migration failed: {e}")
+
+# ── Username validation ────────────────────────────────────────
+USERNAME_RE = re.compile(r'^[a-zA-Z0-9_]{3,30}$')
 
 # ============================================
 # MODELS
@@ -90,6 +93,9 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+class LogoutRequest(BaseModel):
+    session_id: str
+
 class AuthResponse(BaseModel):
     session_id: str
     profile: BuilderProfile
@@ -125,36 +131,25 @@ class CommunityResponse(BaseModel):
 class JoinCommunityRequest(BaseModel):
     session_id: str
 
-class LogoutRequest(BaseModel):
-    session_id: str
-
 class FollowRequest(BaseModel):
     session_id: str
-
-
-# Username: 3-30 chars, alphanumeric + underscore only
-USERNAME_RE = re.compile(r'^[a-zA-Z0-9_]{3,30}$')
 
 # ============================================
 # HELPERS
 # ============================================
 
 def _row_to_dict(row) -> dict:
-    """Convert a psycopg2 RealDictRow to a plain dict with safe defaults."""
     if row is None:
         return None
     d = dict(row)
-    # github_repos comes back as string from JSONB — parse it
     if isinstance(d.get('github_repos'), str):
         try:
             d['github_repos'] = json.loads(d['github_repos'])
         except Exception:
             d['github_repos'] = []
-    # Ensure list fields are never None
     for field in ['interests', 'open_to', 'github_languages', 'learning']:
         if d.get(field) is None:
             d[field] = []
-    # Safe defaults
     d.setdefault('bio', '')
     d.setdefault('building_style', 'figures_it_out')
     d.setdefault('availability', 'open')
@@ -167,15 +162,15 @@ def _row_to_dict(row) -> dict:
     d.setdefault('current_idea', None)
     if not d.get('avatar'):
         d['avatar'] = f"https://api.dicebear.com/7.x/avataaars/svg?seed={d.get('username', 'anon')}"
-    # Ensure datetimes are strings
     for field in ['created_at', 'updated_at']:
-        if d.get(field) and not isinstance(d[field], str):
-            d[field] = d[field].isoformat()
+        val = d.get(field)
+        if val is None:
+            d[field] = datetime.now().isoformat()
+        elif not isinstance(val, str):
+            d[field] = val.isoformat()
     return d
 
-
 def _safe_profile(row) -> BuilderProfile:
-    """Convert a DB row to a BuilderProfile, stripping sensitive fields."""
     if row is None:
         return None
     d = _row_to_dict(row) if not isinstance(row, dict) else row.copy()
@@ -203,8 +198,6 @@ async def fetch_github_data(github_username: str) -> dict:
             if profile_res.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"GitHub user '{github_username}' not found")
             if profile_res.status_code != 200:
-                err_text = profile_res.text
-                print(f"[github] API Error for {github_username}: {profile_res.status_code} - {err_text}")
                 raise HTTPException(status_code=500, detail="GitHub API error")
 
             profile = profile_res.json()
@@ -299,7 +292,6 @@ async def register(request: RegisterRequest):
     }
 
     upsert_builder(new_builder)
-
     session_id = str(uuid.uuid4())
     save_session(session_id, request.username)
 
@@ -329,6 +321,7 @@ async def login(request: LoginRequest):
         profile=_safe_profile(builder),
         needs_onboarding=False
     )
+
 
 @app.post("/logout")
 async def logout(request: LogoutRequest):
@@ -366,40 +359,32 @@ async def update_profile(request: UpdateProfileRequest):
     upsert_builder(updated)
     return {"success": True, "profile": _safe_profile(updated)}
 
+
+@app.get("/profile/following/list")
+async def list_following(session_id: str):
+    username = get_session_username(session_id)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return {"following": get_following_list(username)}
+
+
+@app.get("/profile/{username}/stats")
+async def get_user_stats(username: str, session_id: Optional[str] = None):
+    stats = get_follow_stats(username)
+    current_username = get_session_username(session_id) if session_id else None
+    following_status = db_is_following(current_username, username) if current_username else False
+    return {**stats, "is_following": following_status}
+
+
 @app.post("/profile/{target_username}/follow")
 async def follow_user(target_username: str, request: FollowRequest):
     current_username = get_session_username(request.session_id)
     if not current_username:
         raise HTTPException(status_code=401, detail="Invalid session")
-    
     if current_username == target_username:
         raise HTTPException(status_code=400, detail="Cannot follow yourself")
-
     status = toggle_follow(current_username, target_username)
     return {"following": status}
-
-@app.get("/profile/{username}/stats")
-async def get_user_stats(username: str, session_id: Optional[str] = None):
-    # Stats are public, but we can return 'is_following' if session is provided
-    stats = get_follow_stats(username)
-    
-    current_username = get_session_username(session_id) if session_id else None
-    following_status = False
-    if current_username:
-        following_status = db_is_following(current_username, username)
-        
-    return {
-        **stats,
-        "is_following": following_status
-    }
-
-@app.get("/profile/following", response_model=List[str])
-async def list_following(session_id: str):
-    username = get_session_username(session_id)
-    if not username:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    return get_following_list(username)
-
 
 
 @app.get("/profile/{username}", response_model=BuilderProfile)
@@ -423,38 +408,30 @@ async def discover_builders(
 ):
     current_username = get_session_username(session_id) if session_id else None
     current_builder = _row_to_dict(get_builder_by_username(current_username)) if current_username else None
-    
+
     all_builders = [_row_to_dict(b) for b in get_builders()]
 
-    # Exclude self
     if current_username:
         all_builders = [b for b in all_builders if b['username'] != current_username]
 
-    # Filter by city if local_only is ON and we have a current user with a city
     if local_only and current_builder and current_builder.get('city'):
         my_city = current_builder['city'].lower().strip()
         all_builders = [
-            b for b in all_builders 
+            b for b in all_builders
             if b.get('city') and b.get('city').lower().strip() == my_city
         ]
 
-    # Filter by skill — searches languages, interests, learning, bio, repo languages
     if filter_interest:
         search = filter_interest.lower().strip()
         def builder_matches(b):
-            # Check github_languages (list)
             if any(search in str(lang).lower() for lang in b.get('github_languages', []) if lang):
                 return True
-            # Check interests (list)
             if any(search in str(i).lower() for i in b.get('interests', []) if i):
                 return True
-            # Check learning (list)
             if any(search in str(l).lower() for l in b.get('learning', []) if l):
                 return True
-            # Check bio (string)
             if search in b.get('bio', '').lower():
                 return True
-            # Check repo languages (list of dicts)
             repo_langs = [
                 str(r.get('language', '')).lower()
                 for r in b.get('github_repos', [])
@@ -500,7 +477,6 @@ async def get_match_analysis(target_username: str, session_id: str, local_only: 
     if not match_result:
         raise HTTPException(status_code=500, detail="Failed to generate match")
 
-    # Email the target if they have an email (skip demo matches)
     target_email = target_builder.get("email")
     if target_email and not demo_result:
         send_match_notification(
@@ -577,7 +553,6 @@ async def join_community_endpoint(community_id: str, request: JoinCommunityReque
 async def health_check():
     try:
         builders = get_builders()
-        # Clean up stale sessions on every health check (runs ~every 5 min on Railway)
         try:
             delete_expired_sessions(days=30)
         except Exception:
@@ -596,11 +571,12 @@ async def health_check():
             "total_builders": 0,
         }
 
+
 @app.get("/")
 async def root():
     return {
         "name": "Partners API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "docs": "/docs",
         "health": "/health"
     }
