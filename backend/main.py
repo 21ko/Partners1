@@ -9,7 +9,7 @@ import uuid
 import re
 from datetime import datetime
 import httpx
-
+from typing import Any
 from brain import analyze_github_profile, find_build_matches, get_demo_match
 from emails import send_match_notification, send_welcome_email
 from database import (
@@ -79,8 +79,8 @@ class BuilderProfile(BaseModel):
     learning: List[str] = []
     experience_level: str = "intermediate"
     looking_for: str = "build_partner"
-    created_at: str
-    updated_at: str
+    created_at: Any
+    updated_at: Any
 
 class RegisterRequest(BaseModel):
     username: str
