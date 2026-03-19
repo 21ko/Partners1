@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { authService } from '../services/authService';
+import { authService, API_URL, safeJson } from '../services/authService';
 import { Community, Builder } from '../types';
 
 const QUOTES = [
@@ -24,23 +24,57 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
   const [selectedComm, setSelectedComm] = useState<Community | null>(null);
   const [commMembers, setCommMembers] = useState<Builder[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [totalBuilders, setTotalBuilders] = useState<number | null>(null);
+
+  const session = authService.getSession();
 
   useEffect(() => {
-    // Randomize initial quote
     setQuoteIdx(Math.floor(Math.random() * QUOTES.length));
-    
-    // Fetch real communities
+
+    // Fetch only the user's joined communities
     const fetchComms = async () => {
+      if (!session?.session_id) {
+        setLoadingComms(false);
+        return;
+      }
       try {
-        const data = await authService.getCommunities();
-        setCommunities(data);
+        // Get all communities + filter to ones the user has joined
+        const all = await authService.getCommunities();
+        // Get user's joined community IDs from their profile
+        const profile = session.profile;
+        const userInterests = (profile?.interests || []).map((i: string) => i.toLowerCase());
+
+        // Filter: show communities matching user's interests or that they explicitly joined
+        // We also always show hackathon communities
+        const userComms = all.filter((c: Community) =>
+          c.type === 'hackathon' ||
+          userInterests.some((interest: string) =>
+            c.name.toLowerCase().includes(interest) ||
+            interest.includes(c.name.toLowerCase())
+          )
+        );
+
+        setCommunities(userComms.slice(0, 4)); // max 4 on dashboard
       } catch (e) {
         console.error("Failed to fetch communities", e);
       } finally {
         setLoadingComms(false);
       }
     };
+
+    // Fetch real builder count from /health
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch(`${API_URL}/health`);
+        const data = await safeJson(res);
+        setTotalBuilders(data.total_builders);
+      } catch (e) {
+        // silently fail
+      }
+    };
+
     fetchComms();
+    fetchHealth();
   }, []);
 
   const handleCommunityClick = async (comm: Community) => {
@@ -82,7 +116,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
               className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight"
             >
               Welcome back, <br />
-              <span className="text-terminal-green font-mono">@{user?.username || 'builder'}</span>
+              <span className="text-terminal-green font-mono">@{user?.username || session?.profile?.username || 'builder'}</span>
             </motion.h2>
             <motion.p
               initial={{ opacity: 0 }}
@@ -105,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
               >
                 FIND_PARTNER.EXE
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab('profile')}
                 className="border border-slate-800 text-white font-mono py-4 px-8 rounded-xl hover:bg-slate-800 transition-all"
               >
@@ -113,8 +147,6 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
               </button>
             </motion.div>
           </div>
-
-          {/* Decorative elements */}
           <div className="absolute top-0 right-0 p-8 hidden md:block opacity-10 font-mono text-[180px] font-black pointer-events-none select-none">
             01
           </div>
@@ -124,23 +156,40 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Main Feed */}
         <div className="lg:col-span-8 space-y-8">
+
+          {/* MY COMMUNITIES */}
           <section className="space-y-6">
-            <h3 className="text-xl font-bold text-white flex items-center gap-3">
-              <span className="text-terminal-blue">&gt;</span> ACTIVE_COMMUNITIES
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <span className="text-terminal-blue">&gt;</span> MY_COMMUNITIES
+              </h3>
+              <button
+                onClick={() => setActiveTab('explore')}
+                className="text-[10px] font-mono text-terminal-blue border border-terminal-blue/30 px-3 py-1.5 rounded-lg hover:bg-terminal-blue/10 transition-all"
+              >
+                BROWSE_ALL →
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {loadingComms ? (
                 [...Array(2)].map((_, i) => (
                   <div key={i} className="h-40 bg-slate-900/50 border border-slate-800 rounded-2xl animate-pulse" />
                 ))
               ) : communities.length === 0 ? (
-                <div className="col-span-2 p-12 text-center border border-slate-800 border-dashed rounded-2xl">
-                  <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">No_Active_Sectors_Found</p>
+                <div className="col-span-2 p-12 text-center border border-slate-800 border-dashed rounded-2xl space-y-3">
+                  <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">No_Communities_Joined_Yet</p>
+                  <button
+                    onClick={() => setActiveTab('explore')}
+                    className="text-terminal-blue font-mono text-[10px] hover:underline"
+                  >
+                    Browse communities →
+                  </button>
                 </div>
               ) : (
                 communities.map((h, i) => (
-                  <motion.div 
-                    key={h.id} 
+                  <motion.div
+                    key={h.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
@@ -149,7 +198,10 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                   >
                     <div className="relative z-10">
                       <div className="flex justify-between items-start mb-4">
-                        <span className="text-[10px] font-mono font-bold px-2 py-1 bg-terminal-blue/10 text-terminal-blue rounded border border-terminal-blue/20">
+                        <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded border ${h.type === 'hackathon'
+                            ? 'bg-terminal-green/10 text-terminal-green border-terminal-green/20'
+                            : 'bg-terminal-blue/10 text-terminal-blue border-terminal-blue/20'
+                          }`}>
                           {h.type.toUpperCase()}
                         </span>
                         <span className="text-xs text-terminal-green font-mono">{h.members_count || 0} active</span>
@@ -159,9 +211,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                         {h.description}
                       </p>
                       <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-terminal-blue transition-all duration-1000" 
-                          style={{ width: `${Math.min(100, ((h.members_count || 0) / 10) * 100)}%` }} 
+                        <div
+                          className="h-full bg-terminal-blue transition-all duration-1000"
+                          style={{ width: `${Math.min(100, ((h.members_count || 0) / 50) * 100)}%` }}
                         />
                       </div>
                     </div>
@@ -173,13 +225,13 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
 
           {/* Community Overlay */}
           <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 ${selectedComm ? 'visible pointer-events-auto' : 'invisible pointer-events-none'}`}>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: selectedComm ? 1 : 0 }}
               onClick={() => setSelectedComm(null)}
-              className="absolute inset-0 bg-[#060A14]/90 backdrop-blur-md" 
+              className="absolute inset-0 bg-[#060A14]/90 backdrop-blur-md"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: selectedComm ? 1 : 0, scale: selectedComm ? 1 : 0.9, y: selectedComm ? 0 : 20 }}
               className="w-full max-w-2xl bg-[#0A0F1C] border border-slate-800 rounded-3xl overflow-hidden relative z-10 shadow-2xl"
@@ -200,10 +252,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                     </div>
                     <p className="text-slate-400 text-sm italic">"{selectedComm.description}"</p>
                   </div>
-                  
+
                   <div className="flex-grow overflow-y-auto p-8 space-y-6 scrollbar-hide">
                     <h4 className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest">Detected_Builders_In_Hub</h4>
-                    
                     {loadingMembers ? (
                       <div className="space-y-4">
                         {[...Array(3)].map((_, i) => (
@@ -212,20 +263,22 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                       </div>
                     ) : commMembers.length === 0 ? (
                       <div className="py-20 text-center space-y-4 border border-dashed border-slate-800 rounded-2xl bg-slate-900/10">
-                        <p className="text-slate-500 font-mono text-xs tracking-widest uppercase">HUD_EMPTY // BE_THE_FIRST_TO_ESTABLISH_UPLINK</p>
+                        <p className="text-slate-500 font-mono text-xs tracking-widest uppercase">HUD_EMPTY // BE_THE_FIRST_TO_JOIN</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3">
                         {commMembers.map((member) => (
                           <div key={member.username} className="p-4 bg-slate-900/50 border border-slate-800 rounded-xl flex items-center justify-between group hover:border-terminal-green transition-all">
                             <div className="flex items-center gap-4">
-                              <img src={member.avatar} className="w-10 h-10 rounded-lg border border-slate-800" alt="" />
+                              <img src={member.avatar} className="w-10 h-10 rounded-lg border border-slate-800" alt=""
+                                onError={(e) => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`; }}
+                              />
                               <div>
                                 <div className="text-white font-bold text-sm">@{member.username}</div>
                                 <div className="text-[10px] font-mono text-slate-500 truncate max-w-[200px]">{member.bio || 'STAYING_LOW_PROFILE'}</div>
                               </div>
                             </div>
-                            <button 
+                            <button
                               onClick={() => setActiveTab('explore')}
                               className="text-[10px] font-mono text-terminal-green border border-terminal-green/20 px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-terminal-green/10"
                             >
@@ -236,9 +289,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="p-6 bg-slate-900/20 border-t border-slate-800 flex justify-center">
-                    <button 
+                    <button
                       onClick={() => setSelectedComm(null)}
                       className="text-[10px] font-mono text-slate-500 hover:text-terminal-blue transition-colors uppercase"
                     >
@@ -250,6 +303,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
             </motion.div>
           </div>
 
+          {/* SYSTEM MESSAGES */}
           <section className="space-y-6">
             <h3 className="text-xl font-bold text-white flex items-center gap-3">
               <span className="text-terminal-purple">&gt;</span> SYSTEM_MESSAGES
@@ -271,7 +325,6 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
 
         {/* Sidebar */}
         <div className="lg:col-span-4 space-y-8">
-          {/* QUOTE OF THE DAY - PRESERVED & STYLED */}
           <section className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <span className="text-4xl text-terminal-green font-mono">"</span>
@@ -296,11 +349,15 @@ const Dashboard: React.FC<DashboardProps> = ({ setActiveTab, user }) => {
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <span className="text-[10px] font-mono text-slate-500 uppercase">Builders_Online</span>
-                  <span className="text-xl font-bold text-terminal-purple font-mono">1,204</span>
+                  <span className="text-xl font-bold text-terminal-purple font-mono">
+                    {totalBuilders !== null ? totalBuilders.toLocaleString() : '—'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-end">
-                  <span className="text-[10px] font-mono text-slate-500 uppercase">Matches_Today</span>
-                  <span className="text-xl font-bold text-terminal-purple font-mono">42</span>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase">My_Communities</span>
+                  <span className="text-xl font-bold text-terminal-purple font-mono">
+                    {loadingComms ? '—' : communities.length}
+                  </span>
                 </div>
                 <div className="pt-4 border-t border-slate-800">
                   <p className="text-[10px] text-slate-500 italic text-center">
