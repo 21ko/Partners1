@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor, register_default_jsonb
 from dotenv import load_dotenv
 import bcrypt
+from typing import List
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
@@ -244,7 +245,7 @@ def get_user_communities(username: str):
             """, (username,))
             return cur.fetchall()
 
-def get_following_list(username: str) -> List[str]:
+def get_following_list(username: str) -> list[str]:
     with db_session() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT following_username FROM follows WHERE follower_username = %s", (username,))
